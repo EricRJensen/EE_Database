@@ -144,3 +144,22 @@ def preprocess_modet(in_ic, var_name, start_date, end_date):
     out_i = out_i.rename(out_i.bandNames().map(replace_name))
     
     return(out_i)
+
+# Function to preprocess MODIS LST
+def preprocess_modlst(in_ic, var_name, start_date, end_date):
+    
+    #Filter for collection for images in date range and select variable of interest
+    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+    
+    # Convert Image Collection to multi-band image
+    out_i = out_ic.toBands()
+    
+    # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+    def replace_name(name):
+        return ee.String(name).replace(var_name, '').replace('_', '').replace('_', '').replace('_', '')
+    
+    
+    # Finish cleaning input image
+    out_i = out_i.rename(out_i.bandNames().map(replace_name))
+    
+    return(out_i)
