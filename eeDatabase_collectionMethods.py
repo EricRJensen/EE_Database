@@ -88,6 +88,7 @@ def preprocess_gm_drought(in_ic, var_name, start_date, end_date):
     out_i = out_i.rename(out_i.bandNames().map(replace_name))
     
     return(out_i)
+
 # Function to preprocess RAP data 
 def preprocess_rap(in_ic, var_name, start_date, end_date):
 
@@ -100,6 +101,27 @@ def preprocess_rap(in_ic, var_name, start_date, end_date):
     # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
     def replace_name(name):
         return ee.String(name).replace(var_name, '').replace('_', '0101')
+    
+    # Finish cleaning input image
+    out_i = out_i.rename(out_i.bandNames().map(replace_name))
+    
+    return(out_i)
+
+# Function to preprocess usdm
+def preprocess_usdm(in_ic, var_name, start_date, end_date):
+    
+    #Filter for collection for images in date range and select variable of interest
+    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+
+    #Filter for CONUS
+    out_ic = out_ic.filter(ee.Filter.eq('region', 'conus'))
+    
+    # Convert Image Collection to multi-band image
+    out_i = out_ic.toBands()
+    
+    # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+    def replace_name(name):
+        return ee.String(name).replace(var_name, '').replace('_', '').replace('conus_','')
     
     # Finish cleaning input image
     out_i = out_i.rename(out_i.bandNames().map(replace_name))
