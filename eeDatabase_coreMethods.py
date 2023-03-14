@@ -1,20 +1,16 @@
 from datetime import date
 from datetime import timedelta
-import os
-import datetime
 import pandas as pd
 import ee
-import geemap
 
-def do_something():
-    return "This is the do something method"
 
 # Apply function to select ID column and convert the ID string to numeric
 def generate_id_i(in_fc, properties):
 
     # Function to select ID band
     def select_id(f):
-        return(f.select([properties.get('in-fc-id')]).set('in_fc_id', ee.Number.parse(f.select([properties.get('in-fc-id')]))))
+        fc_id = properties.get('in-fc-id')
+        return(f.select([fc_id]).set(fc_id, ee.Number.parse(f.get(fc_id))))
     in_fc = in_fc.map(select_id)
 
     # Convert feature collection to list
@@ -251,7 +247,7 @@ def pts_to_img_categorical(in_fc, properties):
 # Export ID image to new Image Collection
 def export_img(out_i, out_path, out_fc, var_name_exp, in_date):
     task = ee.batch.Export.image.toAsset(
-        image = out_i_date,
+        image = out_i,
         description = f'Append - {var_name_exp} - {in_date}',
         assetId = f'{out_path}/{in_date}',
         region = out_fc.geometry().buffer(20),
