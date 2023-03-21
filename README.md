@@ -1,2 +1,2 @@
-# BLM_Database
-Repository to manage codebase for Bureau of Land Management time-series database scripts
+# EE_Database
+Repository to manage codebase for the general Earth Engine time-series database scripts
