@@ -108,7 +108,7 @@ def pts_to_img_continuous(in_fc, properties):
     
     # Function to generate image from stats stored in Feature Collection property
     def generate_stat_image(prop):
-        img = fc.reduceToImage(properties = [prop], reducer = ee.Reducer.sum()).rename([prop])
+        img = fc.reduceToImage(properties = [prop], reducer = ee.Reducer.mean()).rename([prop])
         return(img)
     
     # Generate multi-band stats image
