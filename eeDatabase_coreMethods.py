@@ -6,7 +6,11 @@ import ee
 
 # Apply function to select ID column and convert the ID string to numeric
 def generate_id_i(in_fc, properties):
-
+    """
+    :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-path": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :return: Earth Engine image of pixels at the equator with values for land unit ID
+    """
     # Function to select ID band
     def select_id(f):
         fc_id = properties.get('in-fc-id')
@@ -57,7 +61,11 @@ def generate_id_i(in_fc, properties):
 
 # Function to return feature time-series as centroid feature collection for continuous variables
 def img_to_pts_continuous(in_i, in_fc):
-    
+    """
+    :param in_i: e.g. Image for single date
+    :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
+    :return: Earth Engine image of pixels at the equator with bands for percentiles and mean
+    """
     # Cast input image to ee.Image
     img = ee.Image(in_i)
     
@@ -99,7 +107,11 @@ def img_to_pts_continuous(in_i, in_fc):
 
 # Function to generate series image collection from feature collections
 def pts_to_img_continuous(in_fc, properties):
-    
+    """
+    :param in_fc: e.g. Output of .img_to_pts_continuous()
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-path": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :return: Earth Engine image of pixels at the equator with values for land unit ID
+    """
     # Cast to FeatureCollections
     fc = ee.FeatureCollection(in_fc)
     
@@ -126,7 +138,11 @@ def pts_to_img_continuous(in_fc, properties):
 
 # Function to return feature time-series as centroid feature collection for continuous variables
 def img_to_pts_categorical(in_i, in_fc):
-    
+    """
+    :param in_i: e.g. Image for single date
+    :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
+    :return: Earth Engine Feature Collection of points at the equator with properties for histogram bins
+    """
     # Cast input image to ee.Image
     img = ee.Image(in_i)
 
@@ -216,7 +232,11 @@ def img_to_pts_categorical(in_i, in_fc):
 
 # Function to generate series image collection from feature collections
 def pts_to_img_categorical(in_fc, properties):
-    
+    '''
+    :param in_fc: e.g. output of img_to_pts_categorical
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-path": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :return: Earth Engine image of pixels at the equator with bands for histogram bins
+    '''
     # Cast to FeatureCollections
     fc = ee.FeatureCollection(in_fc)
 
@@ -245,9 +265,25 @@ def pts_to_img_categorical(in_fc, properties):
 
 
 # Export ID image to new Image Collection
-def export_img(out_i, out_path, out_fc, var_name_exp, in_date):
+def export_img(out_i, out_fc, properties):
+    '''
+    :param out_i: e.g. Image to export returned from .pts_to_img*()
+    :param out_fc: e.g. Feature Collection at equator returned from .img_to_pts*()
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-path": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :return: Earth Engine image of pixels at the equator with bands for histogram bins
+    '''
+    in_date = properties.get('in_date')
+    out_path = properties.get('out_path')
+    var_name_exp = properties.get('var_name_exp')
+
     task = ee.batch.Export.image.toAsset(
-        image = out_i,
+        image = out_i.set("system:index", out_fc.get('f_id'))\
+            .set("land-unit", properties.get('land-unit'))\
+            .set("in-fc-path", properties.get('in-fc-path'))\
+            .set("in-fc-id", properties.get('in-fc-id'))\
+            .set("in-ic-path", properties.get('in-ic-path'))\
+            .set("var-type", properties.get('var-type'))\
+            .set("var-name", properties.get('var-name')),
         description = f'Append - {var_name_exp} - {in_date}',
         assetId = f'{out_path}/{in_date}',
         region = out_fc.geometry().buffer(20),
