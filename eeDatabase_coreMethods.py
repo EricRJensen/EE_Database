@@ -5,6 +5,7 @@ import ee
 
 
 # Apply function to select ID column and convert the ID string to numeric
+
 def generate_id_img(in_fc, properties):
     """
     :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
