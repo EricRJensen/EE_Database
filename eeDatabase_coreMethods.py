@@ -5,8 +5,7 @@ import ee
 
 
 # Apply function to select ID column and convert the ID string to numeric
-
-def generate_id_img(in_fc, properties):
+def generate_id_img(in_fc, in_fc_id):
     """
     :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
@@ -14,7 +13,7 @@ def generate_id_img(in_fc, properties):
     """
     # Function to select ID band
     def select_id(f):
-        fc_id = properties.get('in-fc-id')
+        fc_id = in_fc_id
         return(f.select([fc_id]).set(fc_id, ee.Number.parse(f.get(fc_id))))
     in_fc = in_fc.map(select_id)
 
@@ -24,8 +23,8 @@ def generate_id_img(in_fc, properties):
     # Get size of in_fc_list
     in_fc_size = in_fc_list.size()
 
-    # Function to create feature collection next to equator
-    def pts_to_equator(i):
+    # Function to create feature collection next to equator during initialization
+    def pts_to_equator_init(i):
 
         # Cast number to EE number
         i = ee.Number(i)
@@ -40,21 +39,13 @@ def generate_id_img(in_fc, properties):
         return(ee.Feature(geom).set(properties))
 
     # Create equator feature collection
-    out_fc = ee.FeatureCollection(ee.List.sequence(0, in_fc_size.subtract(1), 1).map(pts_to_equator)).set('f_id', 'id')
+    out_fc = ee.FeatureCollection(ee.List.sequence(0, in_fc_size.subtract(1), 1).map(pts_to_equator_init)).set('f_id', 'id')
 
     # Get ID property name
     prop = out_fc.first().propertyNames().remove('system:index')
 
     # Reduce ID property to image
-    id_i = out_fc.reduceToImage(properties = prop, reducer = ee.Reducer.mean())\
-            .rename(['id'])\
-            .set("system:index", out_fc.get('f_id'))\
-            .set("land-unit", properties.get('land-unit'))\
-            .set("in-fc-path", properties.get('in-fc-path'))\
-            .set("in-fc-id", properties.get('in-fc-id'))\
-            .set("in-ic-paths", properties.get('in-ic-paths'))\
-            .set("var-type", properties.get('var-type'))\
-            .set("var-name", properties.get('var-name'))
+    id_i = out_fc.reduceToImage(properties = prop, reducer = ee.Reducer.mean())
 
     # Return the id image and the points geometry for creating image export geometry
     return(ee.List([id_i, out_fc]))
@@ -84,9 +75,9 @@ def img_to_pts_continuous(in_i, in_fc):
     
     # Get size of RR features
     img_rr_size = img_rr_list.size()
-    
-    # Function to create feature collection next to equator
-    def pts_to_equator(i):
+
+    # Function to create feature collection next to equator after reduction
+    def pts_to_equator_rr(i):
         
         # Cast number to EE number
         i = ee.Number(i)
@@ -99,15 +90,15 @@ def img_to_pts_continuous(in_i, in_fc):
         
         # Return object with properties
         return(ee.Feature(geom).set(properties))
-    
+
     # Create equator feature collection
-    equator_fc = ee.FeatureCollection(ee.List.sequence(0, img_rr_size.subtract(1), 1).map(pts_to_equator))
+    equator_fc = ee.FeatureCollection(ee.List.sequence(0, img_rr_size.subtract(1), 1).map(pts_to_equator_rr))
     
     return(equator_fc)
 
 
 # Function to generate series image collection from feature collections
-def pts_to_img_continuous(in_fc, properties):
+def pts_to_img_continuous(in_fc):
     """
     :param in_fc: e.g. Output of .img_to_pts_continuous()
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
@@ -126,14 +117,7 @@ def pts_to_img_continuous(in_fc, properties):
     
     # Generate multi-band stats image
     img_mb = ee.ImageCollection(props.map(generate_stat_image)).toBands()\
-            .rename(props)\
-            .set("system:index", properties.get('in-date'))\
-            .set("land-unit", properties.get('land-unit'))\
-            .set("in-fc-path", properties.get('in-fc-path'))\
-            .set("in-fc-id", properties.get('in-fc-id'))\
-            .set("in-ic-paths", properties.get('in-ic-paths'))\
-            .set("var-type", properties.get('var-type'))\
-            .set("var-name", properties.get('var-name'))
+            .rename(props)
     
     return(img_mb)
 
@@ -193,7 +177,7 @@ def img_to_pts_categorical(in_i, in_fc):
         
         # Function to rename histogram keys 
         def rename_histogram_keys(key):
-            key = ee.String(key).replace('.0','')
+            key = ee.String(key).slice(0,-2)
             return(ee.String('c').cat(key))
         
         # Rename histogram
@@ -210,8 +194,8 @@ def img_to_pts_categorical(in_i, in_fc):
     # Get size of RR features
     img_rr_size = img_rr_list.size()
     
-    # Function to create feature collection next to equator
-    def pts_to_equator(i):
+    # Function to create feature collection next to equator after reduction
+    def pts_to_equator_rr(i):
         
         # Cast number to EE number
         i = ee.Number(i)
@@ -224,15 +208,15 @@ def img_to_pts_categorical(in_i, in_fc):
         
         # Return object with properties
         return(ee.Feature(geom).set(properties))
-    
+
     # Create equator feature collection
-    equator_fc = ee.FeatureCollection(ee.List.sequence(0, img_rr_size.subtract(1), 1).map(pts_to_equator))
+    equator_fc = ee.FeatureCollection(ee.List.sequence(0, img_rr_size.subtract(1), 1).map(pts_to_equator_rr))
     
     return(equator_fc)
 
 
 # Function to generate series image collection from feature collections
-def pts_to_img_categorical(in_fc, properties):
+def pts_to_img_categorical(in_fc):
     '''
     :param in_fc: e.g. output of img_to_pts_categorical
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
@@ -253,41 +237,29 @@ def pts_to_img_categorical(in_fc, properties):
     
     # Generate multi-band stats image
     img_mb = ee.ImageCollection(props.map(generate_stat_image)).toBands()\
-            .rename(props)\
-            .set("system:index", properties.get('in-date'))\
-            .set("land-unit", properties.get('land-unit'))\
-            .set("in-fc-path", properties.get('in-fc-path'))\
-            .set("in-fc-id", properties.get('in-fc-id'))\
-            .set("in-ic-paths", properties.get('in-ic-paths'))\
-            .set("var-type", properties.get('var-type'))\
-            .set("var-name", properties.get('var-name'))
+            .rename(props)
     
     return(img_mb)
 
 
 # Export ID image to new Image Collection
-def export_img(out_i, out_fc, properties):
+def export_img(out_i, out_region, out_path, out_id, properties):
     '''
     :param out_i: e.g. Image to export returned from .pts_to_img*()
     :param out_fc: e.g. Feature Collection at equator returned from .img_to_pts*()
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
     :return: Earth Engine image of pixels at the equator with bands for histogram bins
     '''
-    in_date = properties.get('in-date')
-    out_path = properties.get('out-path')
-    var_name_exp = properties.get('var-name-exp')
 
+    # Define var name string for export
+    var_name_exp = properties.get('var_name').replace('_', '')
+
+    # Queue and start export task
     task = ee.batch.Export.image.toAsset(
-        image = out_i.set("system:index", out_fc.get('f_id'))\
-            .set("land-unit", properties.get('land-unit'))\
-            .set("in-fc-path", properties.get('in-fc-path'))\
-            .set("in-fc-id", properties.get('in-fc-id'))\
-            .set("in-ic-paths", properties.get('in-ic-paths'))\
-            .set("var-type", properties.get('var-type'))\
-            .set("var-name", properties.get('var-name')),
-        description = f'Append - {var_name_exp} - {in_date}',
-        assetId = f'{out_path}/{in_date}',
-        region = out_fc.geometry().buffer(20),
+        image = out_i.set(properties),
+        description = f'Append - {var_name_exp} - {out_id}',
+        assetId = f'{out_path}/{out_id}',
+        region = out_region,
         scale = 22.264,
         maxPixels = 1e13)
     task.start()

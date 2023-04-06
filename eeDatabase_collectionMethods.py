@@ -154,7 +154,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     :param end_date: e.g. datetime.datetime(2022, 5, 1)
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
-    if in_ic_paths[0] == 'projects/rangeland-analysis-platform/vegetation-cover-v3':
+    if in_ic_paths[0] == 'projects/rap-data-365417/assets/vegetation-cover-v3':
         
         # Read-in rap image collection
         in_ic = ee.ImageCollection(in_ic_paths[0])
@@ -174,7 +174,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
 
         return(out_i)
     
-    elif in_ic_paths[0] == 'projects/rangeland-analysis-platform/npp-partitioned-v3':
+    elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-v3':
 
         # Function to convert NPP to aboveground biomass
         def production_conversion(img):
