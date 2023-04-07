@@ -94,7 +94,7 @@ def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
     return(out_i)
 
 # Function to preprocess GridMET
-def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days):
+def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days = 5):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
@@ -118,10 +118,10 @@ def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days)
         
         # Filter for next five days
         date = ee.Date(date)
-        out_ic_aggregate = out_ic.filterDate(date, date.advance(5, 'day'))
+        out_ic_aggregate = out_ic.filterDate(date, date.advance(aggregation_days, 'day'))
     
         # Aggregate variables over that time
-        pr_img = out_ic_aggregate.select('pr').reduce(ee.Reducer.sum()).rename(['pr'])
+        pr_img = out_ic_aggregate.select('pr').reduce(ee.Reducer.sum()).rename(['precip'])
         tmmn_img = out_ic_aggregate.select('tmmn').reduce(ee.Reducer.mean()).rename(['tmmn'])
         tmmx_img = out_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx'])
         eto_img = out_ic_aggregate.select('eto').reduce(ee.Reducer.sum()).rename(['eto'])
@@ -226,10 +226,10 @@ def preprocess_usdm(in_ic_paths, var_name, start_date, end_date):
     # Read-in usdm image collection
     in_ic = ee.ImageCollection(in_ic_paths[0])
 
-    #Filter for collection for images in date range and select variable of interest
+    # Filter for collection for images in date range and select variable of interest
     out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
 
-    #Filter for CONUS
+    # Filter for CONUS
     out_ic = out_ic.filter(ee.Filter.eq('region', 'conus'))
     
     # Convert Image Collection to multi-band image

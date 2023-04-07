@@ -45,7 +45,7 @@ def generate_id_img(in_fc, in_fc_id):
     prop = out_fc.first().propertyNames().remove('system:index')
 
     # Reduce ID property to image
-    id_i = out_fc.reduceToImage(properties = prop, reducer = ee.Reducer.mean())
+    id_i = out_fc.reduceToImage(properties = prop, reducer = ee.Reducer.mean()).rename('id')
 
     # Return the id image and the points geometry for creating image export geometry
     return(ee.List([id_i, out_fc]))
@@ -122,7 +122,7 @@ def pts_to_img_continuous(in_fc):
     return(img_mb)
 
 # Function to return feature time-series as centroid feature collection for continuous variables
-def img_to_pts_categorical(in_i, in_fc):
+def img_to_pts_categorical(in_i, in_fc, in_ic_name):
     """
     :param in_i: e.g. Image for single date
     :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
@@ -145,19 +145,21 @@ def img_to_pts_categorical(in_i, in_fc):
     # 1.2-1.5 (W2) = 8
     # 1.5-2.0 (W3) = 9
     # >2.0 (W4) = 10
-    # Reclassify drought blends
-    # There needs to be logic here to handle "USDM" "long-term-blend" etc. differently
-    img = img.where(img.lt(-2.0), 0)\
-        .where(img.lt(-1.5).And(img.gte(-2.0)), 1)\
-        .where(img.lt(-1.2).And(img.gte(-1.5)), 2)\
-        .where(img.lt(-0.7).And(img.gte(-1.2)), 3)\
-        .where(img.lt(-0.5).And(img.gte(-0.7)), 4)\
-        .where(img.lt(0.5).And(img.gte(-0.5)), 5)\
-        .where(img.lt(0.7).And(img.gte(0.5)), 6)\
-        .where(img.lt(1.2).And(img.gte(0.7)), 7)\
-        .where(img.lt(1.5).And(img.gte(1.2)), 8)\
-        .where(img.lt(2.0).And(img.gte(1.5)), 9)\
-        .where(img.gte(2.0), 10)
+    if in_ic_name == "GridMET_Drought":
+        img = img.where(img.lt(-2.0), 0)\
+            .where(img.lt(-1.5).And(img.gte(-2.0)), 1)\
+            .where(img.lt(-1.2).And(img.gte(-1.5)), 2)\
+            .where(img.lt(-0.7).And(img.gte(-1.2)), 3)\
+            .where(img.lt(-0.5).And(img.gte(-0.7)), 4)\
+            .where(img.lt(0.5).And(img.gte(-0.5)), 5)\
+            .where(img.lt(0.7).And(img.gte(0.5)), 6)\
+            .where(img.lt(1.2).And(img.gte(0.7)), 7)\
+            .where(img.lt(1.5).And(img.gte(1.2)), 8)\
+            .where(img.lt(2.0).And(img.gte(1.5)), 9)\
+            .where(img.gte(2.0), 10)
+    # Maintain original values for USDM
+    elif in_ic_name == "USDM":
+        img = img
     
     # Get resolution of the image
     res = img.select(0).projection().nominalScale()
@@ -216,7 +218,7 @@ def img_to_pts_categorical(in_i, in_fc):
 
 
 # Function to generate series image collection from feature collections
-def pts_to_img_categorical(in_fc):
+def pts_to_img_categorical(in_fc, in_ic_name):
     '''
     :param in_fc: e.g. output of img_to_pts_categorical
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
@@ -225,14 +227,18 @@ def pts_to_img_categorical(in_fc):
     # Cast to FeatureCollections
     fc = ee.FeatureCollection(in_fc)
 
-    blends_classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
+    # Define classes for reclassification of properties
+    if in_ic_name == "GridMET_Drought":
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
+    elif in_ic_name == "USDM":
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
         
     # Get list of properties to iterate over for creating multiband image for each date
-    props = ee.List(blends_classes)
+    props = ee.List(classes)
     
     # Function to generate image from stats stored in Feature Collection property
     def generate_stat_image(prop):
-        img = fc.reduceToImage(properties = [prop], reducer = ee.Reducer.sum()).rename([prop])
+        img = fc.reduceToImage(properties = [prop], reducer = ee.Reducer.mean()).rename([prop])
         return(img)
     
     # Generate multi-band stats image
