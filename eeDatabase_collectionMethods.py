@@ -22,7 +22,7 @@ def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
         property_list = ["system:index", "system:time_start"]
         
         # Define preliminary variables for short-term blend calculation
-        stb_variable = "short_term_drought_blend"
+        stb_variable = "Short_Term_Drought_Blend"
         stb_pdsi_img = img.select("pdsi")
         stb_z_img = img.select("z")
         stb_spi90d_img = img.select("spi90d")
@@ -46,7 +46,7 @@ def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
                 "z_coef": stb_z_coef})
         
         # Define preliminary variables for long-term blend calculation
-        ltb_variable = "long_term_drought_blend"
+        ltb_variable = "Long_Term_Drought_Blend"
         ltb_pdsi_img = img.select("pdsi")
         ltb_spi180d_img = img.select("spi180d")
         ltb_spi1y_img = img.select("spi1y")
@@ -180,7 +180,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         def production_conversion(img):
 
             year = ee.Date(img.get('system:time_start')).format('YYYY')
-            matYear = ee.ImageCollection("projects/rangeland-analysis-platform/gridmet-MAT").filterDate(year).first()
+            matYear = ee.ImageCollection("projects/rap-data-365417/assets/gridmet-MAT").filterDate(year).first()
             fANPP = (matYear.multiply(0.0129)).add(0.171).rename('fANPP')
 
             # NPP scalar, KgC to lbsC, m2 to acres, fraction of NPP aboveground, C to biomass
@@ -200,10 +200,10 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
 
         # Filter for collection for images in date range and select variable of interest
         out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
-        
+
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
-        
+
         # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
         def replace_name(name):
             return ee.String(name).replace(var_name, '').replace('_', '0101')

@@ -251,13 +251,15 @@ def export_img(out_i, out_region, out_path, out_id, properties):
     :return: Earth Engine image of pixels at the equator with bands for histogram bins
     '''
 
-    # Define var name string for export
-    var_name_exp = properties.get('var_name').replace('_', '')
+    # Define variables for export task
+    var_name_exp = properties.get('var_name').replace('_', '').lower()
+    in_ic_name_exp = properties.get('in_ic_name').replace('_', '').lower()
+    land_unit_exp = properties.get('land_unit_short').replace('_', '').lower()
 
     # Queue and start export task
     task = ee.batch.Export.image.toAsset(
         image = out_i.set(properties),
-        description = f'Append - {var_name_exp} - {out_id}',
+        description = f'append - {land_unit_exp} {in_ic_name_exp} {var_name_exp} - {out_id}',
         assetId = f'{out_path}/{out_id}',
         region = out_region,
         scale = 22.264,
