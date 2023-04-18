@@ -298,3 +298,202 @@ def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
     out_i = out_i.rename(out_i.bandNames().map(replace_name))
     
     return(out_i)
+
+# Function to preprocess ls ndvi median composites
+def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
+    
+    #Convert start/end date to correct format
+    start_date = ee.Number.parse(ee.Date(start_date).format('YYYYMMdd'))
+    end_date = ee.Number.parse(ee.Date(end_date).format('YYYYMMdd'))
+
+    #Property List
+    property_list = ["system:index", "system:time_start"]
+
+    # Unpack paths
+    ic5,ic7,ic8,ic9 = [in_ic5,in_ic7,in_ic8,in_ic9]
+
+    # Define processing functions 
+    # CloudMask
+    def landsat_qa_pixel_cloud_mask_func(img):
+        """
+        Apply collection 2 CFMask cloud mask to a daily Landsat SR image
+        https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-1328_Landsat8-9-OLI-TIRS-C2-L2-DFCB-v6.pdf
+        :param img: Earth Engine Image
+        :return: Earth Engine Image
+        """
+        qa_img = img.select(["QA_PIXEL"])
+        cloud_mask = (
+            qa_img.rightShift(3).bitwiseAnd(1).neq(0)
+            # cloud confidence
+            # .And(qa_img.rightShift(8).bitwiseAnd(3).gte(cloud_confidence))
+            # cirrus
+           .Or(qa_img.rightShift(2).bitwiseAnd(1).neq(0))
+            # shadow
+           .Or(qa_img.rightShift(4).bitwiseAnd(1).neq(0))
+            # snow
+           .Or(qa_img.rightShift(5).bitwiseAnd(1).neq(0))
+            # dilate
+           .Or(qa_img.rightShift(1).bitwiseAnd(1).neq(0))
+        )
+        return img.updateMask(cloud_mask.Not())
+
+    # Radsat Mask
+    def landsat_qa_pixel_radsat_mask_func(img):
+        """
+        Apply collection 2 RADSAT mask to a daily Landsat SR image
+        This function can be applied to Landsat 1-5, 7, 8, and 9
+        https://www.usgs.gov/landsat-missions/landsat-collection-2-quality-assessment-bands
+        :param img: Earth Engine Image
+        :return: Earth Engine Image
+        """
+        qa_img = img.select(["QA_RADSAT"])
+        radsat_mask = (
+            # Band 1
+            qa_img.rightShift(0).bitwiseAnd(1).neq(0)
+            # Band 2
+            .Or(qa_img.rightShift(1).bitwiseAnd(1).neq(0))
+            # Band 3
+            .Or(qa_img.rightShift(2).bitwiseAnd(1).neq(0))
+            # Band 4
+            .Or(qa_img.rightShift(3).bitwiseAnd(1).neq(0))
+            # Band 5
+            .Or(qa_img.rightShift(4).bitwiseAnd(1).neq(0))
+            # Band 6
+            .Or(qa_img.rightShift(5).bitwiseAnd(1).neq(0))
+            # Band 7
+            .Or(qa_img.rightShift(6).bitwiseAnd(1).neq(0))
+        )
+        return img.updateMask(radsat_mask.Not())
+
+    # Saturation Mask
+    def landsat_mask_saturated_pixels(img):
+        """
+        Apply pixel-wise mask across all bands for which an individual band is saturated
+        This issue is understood by USGS:
+        https://www.usgs.gov/faqs/why-are-negative-values-observed-over-water-some-landsat-surface-reflectance-products
+        :param img: Earth Engine Image
+        :return: Earth Engine Image
+        """
+
+        mask = img.eq(65535).reduce(ee.Reducer.anyNonZero())
+
+        return(img.updateMask(mask.Not()))
+
+    # Band Functions
+    def landsat5_sr_band_func(img):
+        """
+        Rename Landsat 4 and 5 bands to common band names
+        Scale reflectance values by 0.0000275 then offset by -0.2
+        :param img: Earth Engine Image
+        :return: Earth Engine Image
+        """
+        return (
+            ee.Image(img)
+            .select(["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B7", "ST_B6"],
+                    ["blue", "green", "red", "nir", "swir1", "swir2", "LST_Day_1km"],)
+            .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802])
+            .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0])
+            .addBands(img.select(["QA_PIXEL"], ["QA_PIXEL"]))
+            .copyProperties(img, property_list)
+        )
+
+
+    def landsat7_sr_band_func(img):
+        """
+        Change band order to match Landsat 8
+        For now, don't include pan-chromatic or high gain thermal band
+        Scale reflectance values by 0.0000275 then offset by -0.2
+        :param img: Earth Engine Image
+        :return:Earth Engine Image
+        """
+        return (
+            ee.Image(img)
+            .select(["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B7", "ST_B6"],
+                    ["blue", "green", "red", "nir", "swir1", "swir2", "LST_Day_1km"],)
+            .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802])
+            .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0])
+            .addBands(img.select(["QA_PIXEL"], ["QA_PIXEL"]))
+            .copyProperties(img, property_list)
+        )
+
+
+    def landsat8_sr_band_func(img):
+        """
+        Rename Landsat 8 and 9 bands to common band names
+        For now, don't include coastal, cirrus, or pan-chromatic
+        Scale reflectance values by 0.0000275 then offset by -0.2
+        :param img: Earth Engine Image
+        :return: Earth Engine Image
+        """
+        return (
+            ee.Image(img)
+            .select(["SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7", "ST_B10"],
+                    ["blue", "green", "red", "nir", "swir1", "swir2", "LST_Day_1km"],)
+            .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.00341802])
+            .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0])
+            .addBands(img.select(["QA_PIXEL"], ["QA_PIXEL"]))
+            .copyProperties(img, property_list)
+        )
+
+    # Constrain Function
+    def landsat_constrain_values(img):
+        """
+        Convert Landsat surface reflectance values that are >1 to 1
+        :param img:
+        :return:
+        """
+        return img.where(img.gt(1), 1)
+    
+    def ndvi_func(image):
+        ndvi = image.normalizedDifference(['nir', 'red']).rename('NDVI');
+        return image.addBands(ndvi);
+    
+    # Apply processing functions 
+    out_ic5 = ic5.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat5_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
+    out_ic7 = ic7.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat7_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
+    out_ic8 = ic8.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat8_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
+    out_ic9 = ic9.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat8_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
+
+    # Merge LS SR Image Collections
+    collection = ee.ImageCollection([])
+    collection = collection.merge(out_ic5)
+    collection = collection.merge(out_ic7)
+    collection = collection.merge(out_ic8)
+    collection = collection.merge(out_ic9)
+    out_ic = ee.ImageCollection(collection).select(var_name)
+
+    #Create 16-day mean Image Collection
+    years = ['1986','1987','1988','1989','1990','1991','1992','1993','1994','1995','1996','1997','1998','1999','2000','2001','2002','2003','2004','2005','2006','2007','2008','2009','2010','2011','2012','2013','2014','2015','2016','2017','2018','2019','2020','2021','2022']
+    doy = ['001','017','033','049','065','081','097','113','129','145','161','177','193','209','225','241','257','273','289','305','321','337','353']
+    dates = []
+    for i in years:
+      for j in doy:
+        date_str = i + '_' + j
+        real_date = datetime.datetime.strptime(date_str, '%Y_%j')
+        str_date = real_date.strftime('%Y-%m-%d')
+        dates.append(str_date)
+    dates = ee.List(dates)
+
+    def collection_maker_16day(date):
+        startDate = ee.Date(date)
+        endDate = startDate.advance(16, 'days', 'EST').format('YYYY-MM-dd')
+        ndviMedian = out_ic.filterDate(startDate, endDate).median().rename(startDate.format('YYYYMMdd')).set('date_filter',ee.Number.parse(startDate.format('YYYYMMdd')))
+        return ndviMedian
+
+    collection = ee.ImageCollection.fromImages(dates.map(collection_maker_16day))
+
+    #Filter Image Collection
+    collection_filtered = collection.filter(ee.Filter.gte('date_filter',start_date)).filter(ee.Filter.lt('date_filter',end_date))
+    
+    # Convert Image Collection to multi-band image
+    out_i = collection_filtered.toBands()
+    
+    # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+    def replace_name(name):
+        return ee.String(name).slice(-8)
+    
+    
+    # Finish cleaning input image
+    out_i = out_i.rename(out_i.bandNames().map(replace_name))
+    
+    return(out_i)
