@@ -139,8 +139,8 @@ def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days 
     def replace_name(name):
         return ee.String(name).replace(var_name, '').replace('_', '')
     
-    # Finish cleaning input image
-    out_i = out_i.rename(out_i.bandNames().map(replace_name))
+    # Finish cleaning input image and apply projection
+    out_i = out_i.rename(out_i.bandNames().map(replace_name)).setDefaultProjection(in_ic.first().projection())
 
     return(out_i)
 
