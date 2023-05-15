@@ -486,8 +486,9 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     def collection_maker_16day(date):
         startDate = ee.Date(date)
         endDate = startDate.advance(16, 'days', 'EST').format('YYYY-MM-dd')
-        ndviMedian = out_ic.filterDate(startDate, endDate).median().rename(startDate.format('YYYYMMdd')).set('date_filter',ee.Number.parse(startDate.format('YYYYMMdd')))
-        return ndviMedian
+        out_ic = out_ic.filterDate(startDate, endDate)
+        ndviMedian = out_ic.median().rename(startDate.format('YYYYMMdd')).set('date_filter',ee.Number.parse(startDate.format('YYYYMMdd')))
+        return ndviMedian.setDefaultProjection(out_ic.first().projection())
 
     collection = ee.ImageCollection.fromImages(dates.map(collection_maker_16day))
 
