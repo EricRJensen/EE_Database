@@ -1,5 +1,6 @@
 from datetime import date
 from datetime import timedelta
+import datetime
 import pandas as pd
 import ee
 
@@ -335,7 +336,13 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     property_list = ["system:index", "system:time_start"]
 
     # Unpack paths
-    ic5,ic7,ic8,ic9 = [in_ic5,in_ic7,in_ic8,in_ic9]
+    ic5,ic7,ic8,ic9 = in_ic_paths
+    
+    #Create image collections from paths
+    ic5_ic = ee.ImageCollection(ic5)
+    ic7_ic = ee.ImageCollection(ic7)
+    ic8_ic = ee.ImageCollection(ic8)
+    ic9_ic = ee.ImageCollection(ic9)
 
     # Define processing functions 
     # CloudMask
@@ -389,20 +396,6 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
             .Or(qa_img.rightShift(6).bitwiseAnd(1).neq(0))
         )
         return img.updateMask(radsat_mask.Not())
-
-    # Saturation Mask
-    def landsat_mask_saturated_pixels(img):
-        """
-        Apply pixel-wise mask across all bands for which an individual band is saturated
-        This issue is understood by USGS:
-        https://www.usgs.gov/faqs/why-are-negative-values-observed-over-water-some-landsat-surface-reflectance-products
-        :param img: Earth Engine Image
-        :return: Earth Engine Image
-        """
-
-        mask = img.eq(65535).reduce(ee.Reducer.anyNonZero())
-
-        return(img.updateMask(mask.Not()))
 
     # Band Functions
     def landsat5_sr_band_func(img):
@@ -459,25 +452,16 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
             .addBands(img.select(["QA_PIXEL"], ["QA_PIXEL"]))
             .copyProperties(img, property_list)
         )
-
-    # Constrain Function
-    def landsat_constrain_values(img):
-        """
-        Convert Landsat surface reflectance values that are >1 to 1
-        :param img:
-        :return:
-        """
-        return img.where(img.gt(1), 1)
     
     def ndvi_func(image):
         ndvi = image.normalizedDifference(['nir', 'red']).rename('NDVI');
         return image.addBands(ndvi);
     
     # Apply processing functions 
-    out_ic5 = ic5.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat5_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
-    out_ic7 = ic7.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat7_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
-    out_ic8 = ic8.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat8_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
-    out_ic9 = ic9.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat_mask_saturated_pixels).map(landsat8_sr_band_func).map(landsat_constrain_values).map(ndvi_func)
+    out_ic5 = ic5_ic.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat5_sr_band_func).map(ndvi_func)
+    out_ic7 = ic7_ic.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat7_sr_band_func).map(ndvi_func)
+    out_ic8 = ic8_ic.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat8_sr_band_func).map(ndvi_func)
+    out_ic9 = ic9_ic.map(landsat_qa_pixel_cloud_mask_func).map(landsat_qa_pixel_radsat_mask_func).map(landsat8_sr_band_func).map(ndvi_func)
 
     # Merge LS SR Image Collections
     collection = ee.ImageCollection([])
@@ -519,6 +503,6 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     
     
     # Finish cleaning input image
-    out_i = out_i.rename(out_i.bandNames().map(replace_name))
-    
+    out_i = out_i.rename(out_i.bandNames().map(replace_name))#.setDefaultProjection(ic9_ic.first().projection())
+
     return(out_i)
