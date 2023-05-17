@@ -121,10 +121,10 @@ def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days 
         date = ee.Date(date)
         out_ic_aggregate = out_ic.filterDate(date, date.advance(aggregation_days, 'day'))
     
-        # Aggregate variables over that time
+        # Aggregate variables over that time and convert temperature to celsius
         pr_img = out_ic_aggregate.select('pr').reduce(ee.Reducer.sum()).rename(['precip'])
-        tmmn_img = out_ic_aggregate.select('tmmn').reduce(ee.Reducer.mean()).rename(['tmmn'])
-        tmmx_img = out_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx'])
+        tmmn_img = out_ic_aggregate.select('tmmn').reduce(ee.Reducer.mean()).rename(['tmmn']).subtract(273.15)
+        tmmx_img = out_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx']).subtract(273.15)
         eto_img = out_ic_aggregate.select('eto').reduce(ee.Reducer.sum()).rename(['eto'])
         vpd_img = out_ic_aggregate.select('vpd').reduce(ee.Reducer.mean()).rename(['vpd'])
     
@@ -322,6 +322,9 @@ def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
     
     # Finish cleaning input image
     out_i = out_i.rename(out_i.bandNames().map(replace_name))
+
+    # Apply scaling and convert from kelvin to celsius
+    out_i = out_i.multiply(0.02).subtract(273.15)
     
     return(out_i)
 
