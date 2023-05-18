@@ -63,6 +63,15 @@ def img_to_pts_continuous(in_i, in_fc):
     
     # Get resolution of the image
     res = img.select(0).projection().nominalScale()
+
+    # Conditionally convert polygon to point if smaller than area of pixel
+    def smallpolygons_to_points(f):
+        
+        f = ee.Feature(f)
+        f = ee.Feature(ee.Algorithms.If(f.area(100).gte(res.pow(2)), f, f.centroid()))
+        return(f)
+    
+    in_fc = in_fc.map(smallpolygons_to_points)
     
     # Run reduce regions for allotments and select only the columns with reducers
     img_rr = img.reduceRegions(collection = in_fc, reducer = ee.Reducer.percentile([5, 25, 50, 75, 95])\
