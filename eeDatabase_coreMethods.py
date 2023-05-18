@@ -133,18 +133,6 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
 
     # Need to further pre-process drought blends to be able to extract bins consistent with drought.gov
     # There are no reducers that allow histogram bins with variable widths, so we have to put bins into categories to start
-    # Reclassify drought blends using schema below
-    # <-2.0 (D4) = 0
-    # -2.0--1.5 (D3) = 1
-    # -1.5--1.2 (D2) = 2
-    # -1.2--0.7 (D1) = 3
-    # -0.7--0.5 (D0) = 4
-    # -0.5-0.5 (Neutral) = 5
-    # 0.5-0.7 (W0) = 6
-    # 0.7-1.2 (W1) = 7
-    # 1.2-1.5 (W2) = 8
-    # 1.5-2.0 (W3) = 9
-    # >2.0 (W4) = 10
     if in_ic_name == "GridMET_Drought":
         img = img.where(img.lt(-2.0), 0)\
             .where(img.lt(-1.5).And(img.gte(-2.0)), 1)\
@@ -157,8 +145,13 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
             .where(img.lt(1.5).And(img.gte(1.2)), 8)\
             .where(img.lt(2.0).And(img.gte(1.5)), 9)\
             .where(img.gte(2.0), 10)
+    
     # Maintain original values for USDM
     elif in_ic_name == "USDM":
+        img = img
+    
+    # Maintain original values for MTBS
+    elif in_ic_name == "MTBS":
         img = img
     
     # Get resolution of the image
@@ -228,10 +221,39 @@ def pts_to_img_categorical(in_fc, in_ic_name):
     fc = ee.FeatureCollection(in_fc)
 
     # Define classes for reclassification of properties
+    # Reclassify drought blends using schema below
+    # <-2.0 (D4) = c0
+    # -2.0--1.5 (D3) = c1
+    # -1.5--1.2 (D2) = c2
+    # -1.2--0.7 (D1) = c3
+    # -0.7--0.5 (D0) = c4
+    # -0.5-0.5 (Neutral) = c5
+    # 0.5-0.7 (W0) = c6
+    # 0.7-1.2 (W1) = c7
+    # 1.2-1.5 (W2) = c8
+    # 1.5-2.0 (W3) = c9
+    # >2.0 (W4) = c10
     if in_ic_name == "GridMET_Drought":
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
+    # USDM classes described below
+    # -1 Neutral or Wet = c0
+    # 0 Abnormal Dry (D0) = c1
+    # 1 Moderate Drought (D1) = c2
+    # 2 Severe Drought (D2) = c3
+    # 3 Extreme Drought (D3) = c4
+    # 4 Exceptional Drought (D4) = c5
     elif in_ic_name == "USDM":
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
+    # MTBS classes described below
+    # 0 Background = c0
+    # 1 Unburned to low severity = c1
+    # 2 Low severity = c2
+    # 3 Moderate severity = c3
+    # 4 High severity = c4
+    # 5 Increased greenness = c5
+    # 6 Non-mapping area = c6
+    elif in_ic_name == "MTBS":
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6']
         
     # Get list of properties to iterate over for creating multiband image for each date
     props = ee.List(classes)
