@@ -179,7 +179,7 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
         
         # Function to rename histogram keys 
         def rename_histogram_keys(key):
-            key = ee.String(key).slice(0,-2)
+            key = ee.String(key).slice(0,2)
             return(ee.String('c').cat(key))
         
         # Rename histogram
