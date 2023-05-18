@@ -283,10 +283,11 @@ def export_img(out_i, out_region, out_path, out_id, properties):
     var_name_exp = properties.get('var_name').replace('_', '').lower()
     in_ic_name_exp = properties.get('in_ic_name').replace('_', '').lower()
     land_unit_exp = properties.get('land_unit_short').replace('_', '').lower()
+    dt_time_start = ee.Date(properties.get('system:index')[0:4] + '-' + properties.get('system:index')[4:6] + '-' + properties.get('system:index')[6:8]).millis()
 
     # Queue and start export task
     task = ee.batch.Export.image.toAsset(
-        image = out_i.set(properties),
+        image = out_i.set(properties).set('system:time_start', dt_time_start),
         description = f'append - {land_unit_exp} {in_ic_name_exp} {var_name_exp} - {out_id}',
         assetId = f'{out_path}/{out_id}',
         region = out_region,
