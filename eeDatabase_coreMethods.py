@@ -154,15 +154,16 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
             .where(img.lt(1.5).And(img.gte(1.2)), 8)\
             .where(img.lt(2.0).And(img.gte(1.5)), 9)\
             .where(img.gte(2.0), 10).toInt()
-    
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
     # Maintain original values for USDM
     elif in_ic_name == "USDM":
         img = img
-    
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
     # Maintain original values for MTBS
     elif in_ic_name == "MTBS":
         img = img
-    
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6']
+
     # Get resolution of the image
     res = img.select(0).projection().nominalScale()
     
@@ -191,6 +192,26 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
     
     #Clean up histogram and set as properties
     img_rr = img_rr.map(process_histogram).select(['c.*'])
+
+    # Add values of 0 for any histogram classes without values
+    def add_missing_props(f):
+        f = ee.Feature(f)
+        
+        # Get properties from reduceRegions call
+        f_props = f.propertyNames().remove("system:index")
+        
+        # Iterate over properties in reduceRegions call to identify missing properties
+        def get_missing_props(prop, classes):
+            classes_remove = ee.List(classes).remove(prop)
+            return(classes_remove)
+        
+        missing_props = ee.List(f_props.iterate(get_missing_props, classes))
+        
+        # Construct dictionary of missing_props: 0 to add as properties to each feature
+        missing_props_dict = ee.Dictionary.fromLists(missing_props, ee.List.repeat(0, missing_props.length()))
+        
+        return(f.set(missing_props_dict))
+    img_rr = img_rr.map(add_missing_props)
 
     # Get list of RR features
     img_rr_list = img_rr.toList(img_rr.size())
