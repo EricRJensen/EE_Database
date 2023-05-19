@@ -537,6 +537,6 @@ def preprocess_mtbs(in_ic_paths, var_name, start_date, end_date):
         return ee.String(name).replace(var_name, '').replace('mtbs_mosaic_', '').replace('_', '').cat('0101')
     
     # Finish cleaning input image
-    out_i = out_i.rename(out_i.bandNames().map(replace_name)).unmask
+    out_i = out_i.rename(out_i.bandNames().map(replace_name)).unmask()
     
     return(out_i)
