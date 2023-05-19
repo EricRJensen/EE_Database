@@ -127,8 +127,10 @@ def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days 
         tmmx_img = out_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx']).subtract(273.15)
         eto_img = out_ic_aggregate.select('eto').reduce(ee.Reducer.sum()).rename(['eto'])
         vpd_img = out_ic_aggregate.select('vpd').reduce(ee.Reducer.mean()).rename(['vpd'])
+        wind_img = out_ic_aggregate.select('vs').reduce(ee.Reducer.mean()).rename(['windspeed'])
+        solar_img = out_ic_aggregate.select('srad').reduce(ee.Reducer.mean()).rename(['srad'])
     
-        return(pr_img.addBands(tmmn_img).addBands(tmmx_img).addBands(eto_img).addBands(vpd_img)\
+        return(pr_img.addBands(tmmn_img).addBands(tmmx_img).addBands(eto_img).addBands(vpd_img).addBands(wind_img).addBands(solar_img)\
                 .set('system:time_start', date)\
                 .set('system:index', date.format('YYYYMMdd')))
 
@@ -155,7 +157,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     :param end_date: e.g. datetime.datetime(2022, 5, 1)
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
-     # Function to convert NPP to aboveground biomass
+    # Function to convert NPP to aboveground biomass
     def production_conversion(img):
 
         year = ee.Date(img.get('system:time_start')).format('YYYY')
@@ -362,13 +364,13 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
             # cloud confidence
             # .And(qa_img.rightShift(8).bitwiseAnd(3).gte(cloud_confidence))
             # cirrus
-           .Or(qa_img.rightShift(2).bitwiseAnd(1).neq(0))
+            .Or(qa_img.rightShift(2).bitwiseAnd(1).neq(0))
             # shadow
-           .Or(qa_img.rightShift(4).bitwiseAnd(1).neq(0))
+            .Or(qa_img.rightShift(4).bitwiseAnd(1).neq(0))
             # snow
-           .Or(qa_img.rightShift(5).bitwiseAnd(1).neq(0))
+            .Or(qa_img.rightShift(5).bitwiseAnd(1).neq(0))
             # dilate
-           .Or(qa_img.rightShift(1).bitwiseAnd(1).neq(0))
+            .Or(qa_img.rightShift(1).bitwiseAnd(1).neq(0))
         )
         return img.updateMask(cloud_mask.Not())
 
@@ -479,11 +481,12 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     doy = ['001','017','033','049','065','081','097','113','129','145','161','177','193','209','225','241','257','273','289','305','321','337','353']
     dates = []
     for i in years:
-      for j in doy:
-        date_str = i + '_' + j
-        real_date = datetime.datetime.strptime(date_str, '%Y_%j')
-        str_date = real_date.strftime('%Y-%m-%d')
-        dates.append(str_date)
+        for j in doy:
+            date_str = i + '_' + j
+            real_date = datetime.datetime.strptime(date_str, '%Y_%j')
+            str_date = real_date.strftime('%Y-%m-%d')
+            dates.append(str_date)
+
     dates = ee.List(dates)
 
     def collection_maker_16day(date):
@@ -504,8 +507,7 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
     def replace_name(name):
         return ee.String(name).slice(-8)
-    
-    
+
     # Finish cleaning input image
     out_i = out_i.rename(out_i.bandNames().map(replace_name))#.setDefaultProjection(ic9_ic.first().projection())
 
