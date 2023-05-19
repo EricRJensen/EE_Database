@@ -153,7 +153,7 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
             .where(img.lt(1.2).And(img.gte(0.7)), 7)\
             .where(img.lt(1.5).And(img.gte(1.2)), 8)\
             .where(img.lt(2.0).And(img.gte(1.5)), 9)\
-            .where(img.gte(2.0), 10)
+            .where(img.gte(2.0), 10).toInt()
     
     # Maintain original values for USDM
     elif in_ic_name == "USDM":
