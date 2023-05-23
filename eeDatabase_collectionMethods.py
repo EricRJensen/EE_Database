@@ -229,7 +229,6 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
-        print(out_i.bandNames().getInfo())
     
         # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
         def replace_name(name):
