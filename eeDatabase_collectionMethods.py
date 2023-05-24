@@ -232,7 +232,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     
         # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
         def replace_name(name):
-            date_str = ee.String(name).replace(var_name, '').replace('1_', '').replace('_', '')
+            date_str = ee.String(name).replace(var_name, '').replace('_', '').replace('_', '').slice(-7)
             str_date = ee.Date.parse('YYYYD', date_str).format('YYYYMMdd')
             return str_date
     
