@@ -331,23 +331,19 @@ def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
     return(out_i)
 
 # Function to preprocess ls ndvi median composites
-def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
-    
-    #Convert start/end date to correct format
-    start_date = ee.Number.parse(ee.Date(start_date).format('YYYYMMdd'))
-    end_date = ee.Number.parse(ee.Date(end_date).format('YYYYMMdd'))
-
-    #Property List
+def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc_bbox):
+ 
+    # Property List
     property_list = ["system:index", "system:time_start"]
 
     # Unpack paths
     ic5,ic7,ic8,ic9 = in_ic_paths
     
     #Create image collections from paths
-    ic5_ic = ee.ImageCollection(ic5)
-    ic7_ic = ee.ImageCollection(ic7)
-    ic8_ic = ee.ImageCollection(ic8)
-    ic9_ic = ee.ImageCollection(ic9)
+    ic5_ic = ee.ImageCollection(ic5).filterBounds(in_fc_bbox)
+    ic7_ic = ee.ImageCollection(ic7).filterBounds(in_fc_bbox)
+    ic8_ic = ee.ImageCollection(ic8).filterBounds(in_fc_bbox)
+    ic9_ic = ee.ImageCollection(ic9).filterBounds(in_fc_bbox)
 
     # Define processing functions 
     # CloudMask
@@ -474,45 +470,34 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date):
     collection = collection.merge(out_ic7)
     collection = collection.merge(out_ic8)
     collection = collection.merge(out_ic9)
-    out_ic = ee.ImageCollection(collection).select(var_name)
+    out_ic = ee.ImageCollection(collection).filterDate(start_date, end_date).select(var_name)
 
-    #Create 16-day mean Image Collection
-    years = ['1986','1987','1988','1989','1990','1991','1992','1993','1994','1995','1996','1997','1998','1999','2000','2001','2002','2003','2004','2005','2006','2007','2008','2009','2010','2011','2012','2013','2014','2015','2016','2017','2018','2019','2020','2021','2022']
-    doy = ['001','017','033','049','065','081','097','113','129','145','161','177','193','209','225','241','257','273','289','305','321','337','353']
-    dates = []
-    for i in years:
-        for j in doy:
-            date_str = i + '_' + j
-            real_date = datetime.datetime.strptime(date_str, '%Y_%j')
-            str_date = real_date.strftime('%Y-%m-%d')
-            dates.append(str_date)
+    # Get RAP dates to match temporal cadence to
+    rap_16day = ee.ImageCollection("projects/rap-data-365417/assets/npp-partitioned-16day-v3").filterDate(start_date, end_date)
+    rap_16day_dates = rap_16day.aggregate_array('system:time_start')
 
-    dates = ee.List(dates)
-
+    # Define function to generate median NDVI composites
     def collection_maker_16day(date):
-        startDate = ee.Date(date)
-        endDate = startDate.advance(16, 'days', 'EST').format('YYYY-MM-dd')
-        out_ic = out_ic.filterDate(startDate, endDate)
-        ndviMedian = out_ic.median().rename(startDate.format('YYYYMMdd')).set('date_filter',ee.Number.parse(startDate.format('YYYYMMdd')))
-        return ndviMedian.setDefaultProjection(out_ic.first().projection())
+        date = ee.Date(date)
+        date_range =  out_ic.filterDate(date,date.advance(16, 'day'))
+        ndviMedian = date_range.reduce(ee.Reducer.median()).rename(['NDVI'])
+        return (ndviMedian.set('system:time_start', date).set('system:index', date.format('YYYYMMdd'))).setDefaultProjection(out_ic.first().projection())
 
-    collection = ee.ImageCollection.fromImages(dates.map(collection_maker_16day))
-
-    #Filter Image Collection
-    collection_filtered = collection.filter(ee.Filter.gte('date_filter',start_date)).filter(ee.Filter.lt('date_filter',end_date))
+    # Apply function to dates list
+    collection = ee.ImageCollection(rap_16day_dates.map(collection_maker_16day)).select(var_name)
     
     # Convert Image Collection to multi-band image
-    out_i = collection_filtered.toBands()
+    out_i = collection.toBands()
     
     # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
     def replace_name(name):
-        return ee.String(name).slice(-8)
+        date_str = ee.String(name).replace(var_name, '').replace('_', '')
+        return date_str
 
     # Finish cleaning input image
-    out_i = out_i.rename(out_i.bandNames().map(replace_name))#.setDefaultProjection(ic9_ic.first().projection())
+    out_i = out_i.rename(out_i.bandNames().map(replace_name))
 
     return(out_i)
-
 
 # Function to preprocess MTBS
 def preprocess_mtbs(in_ic_paths, var_name, start_date, end_date):
