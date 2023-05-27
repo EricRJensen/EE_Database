@@ -158,7 +158,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Function to convert NPP to aboveground biomass
-    def production_conversion(img):
+    def rap_annual_biomass_function(img):
 
         year = ee.Date(img.get('system:time_start')).format('YYYY')
         matYear = ee.ImageCollection("projects/rap-data-365417/assets/gridmet-MAT").filterDate(year).first()
@@ -175,6 +175,38 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         agb = ee.Image(agb).addBands(herbaceous)
 
         return(agb)
+    
+    # Define function to preprocess RAP NPP 16-day
+    def rap_16day_biomass_function(image):
+
+        # Import GridMET MAT collection
+        mat = ee.ImageCollection("projects/rap-data-365417/assets/gridmet-MAT")
+
+        # Use previous year's MAT to partition between above and below-ground for current year's provisional
+        mat_last = ee.Image(mat.toList(mat.size()).get(mat.size().subtract(1)))
+        mat_last = mat_last\
+            .set("system:time_start", ee.Date(mat_last.get("system:time_start")).advance(1, 'year').millis())\
+            .set("system:index", ee.Date(mat_last.get("system:time_start")).advance(1, 'year').format("YYYY"))
+        mat = ee.ImageCollection(mat.toList(mat.size()).add(mat_last))
+
+        # Select current MAT to partition between above and below-ground
+        year = ee.Date(image.get('system:time_start')).format('YYYY')
+        matYear = mat.filterDate(year).first()
+        fANPP = (matYear.multiply(0.0129)).add(0.171).rename('fANPP')
+
+        # Apply scaling and partitioning factors
+        agb = image.multiply(0.0001)\
+            .multiply(2.20462)\
+            .multiply(4046.86)\
+            .multiply(fANPP)\
+            .multiply(2.1276)\
+            .rename(['afgAGB', 'pfgAGB'])\
+            .copyProperties(image, ['system:time_start'])\
+            .set('year', year)
+
+        herbaceous = ee.Image(agb).reduce(ee.Reducer.sum()).rename(['herbaceousAGB'])
+        agb = ee.Image(agb).addBands(herbaceous)
+        return agb
     
     if in_ic_paths[0] == 'projects/rap-data-365417/assets/vegetation-cover-v3':
         
@@ -199,7 +231,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-v3':
         
         # Read-in rap image collection and map function over bands
-        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(production_conversion)
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(rap_annual_biomass_function)
 
         # Filter for collection for images in date range and select variable of interest
         out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
@@ -219,20 +251,24 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-16day-v3':
 
         #Read in provisional data
-        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')
+        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP']).map(rap_16day_biomass_function)
 
         # Read-in rap image collection and map function over bands
-        in_ic = ee.ImageCollection(in_ic_paths[0]).merge(prov_ic).select(['afgNPP', 'pfgNPP']).map(production_conversion)
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(rap_16day_biomass_function)
+        
+        #Merge
+        merged_ic = prov_ic.merge(in_ic)
 
         # Filter for dates without NAs for the long term blend
-        out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+        out_ic = merged_ic.filterDate(start_date, end_date).select(var_name)
     
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
     
         # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
         def replace_name(name):
-            date_str = ee.String(name).replace(var_name, '').replace('_', '').replace('_', '').slice(-7)
+            date_str = ee.String(name).replace(var_name, '').replace('_', '').replace('_', '')
+            date_str = date_str.slice(-7)
             str_date = ee.Date.parse('YYYYD', date_str).format('YYYYMMdd')
             return str_date
     
@@ -240,7 +276,6 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         out_i = out_i.rename(out_i.bandNames().map(replace_name))
     
         return(out_i)
-    
 
 # Function to preprocess usdm
 def preprocess_usdm(in_ic_paths, var_name, start_date, end_date):
