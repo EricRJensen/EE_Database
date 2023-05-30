@@ -366,13 +366,18 @@ def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
     return(out_i)
 
 # Function to preprocess ls ndvi median composites
-def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc_bbox):
- 
+def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
+
     # Property List
     property_list = ["system:index", "system:time_start"]
 
     # Unpack paths
     ic5,ic7,ic8,ic9 = in_ic_paths
+
+    # Generate bounding box
+    def bbox(f):
+        return(f.simplify(1000))
+    in_fc_bbox = ee.FeatureCollection(in_fc.map(bbox)).geometry().convexHull(10)
     
     #Create image collections from paths
     ic5_ic = ee.ImageCollection(ic5).filterBounds(in_fc_bbox)

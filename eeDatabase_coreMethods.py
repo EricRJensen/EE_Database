@@ -68,7 +68,7 @@ def img_to_pts_continuous(in_i, in_fc):
     def smallpolygons_to_points(f):
         
         f = ee.Feature(f)
-        f = ee.Feature(ee.Algorithms.If(f.area(100).gte(res.pow(2)), f, f.centroid()))
+        f = ee.Feature(ee.Algorithms.If(f.area(100).gte(res.pow(2).multiply(2)), f, f.centroid()))
         return(f)
     
     in_fc = in_fc.map(smallpolygons_to_points)
