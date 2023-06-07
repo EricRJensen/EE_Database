@@ -1,7 +1,3 @@
-# from datetime import date
-# from datetime import timedelta
-# import datetime
-# import pandas as pd
 import ee
 
 
