@@ -3,7 +3,6 @@ from datetime import timedelta
 import pandas as pd
 import ee
 
-
 # Apply function to select ID column and convert the ID string to numeric
 def generate_id_img(in_fc, in_fc_id):
     """

@@ -1,17 +1,81 @@
-from datetime import date
-from datetime import timedelta
-import datetime
-import pandas as pd
+# from datetime import date
+# from datetime import timedelta
+# import datetime
+# import pandas as pd
 import ee
 
 
+def get_collection_dates(in_ic_paths, start_date, end_date):
+    """
+    :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
+    :param start_date: e.g. datetime.datetime(2022, 1, 1)
+    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :return: Client-side list of system:time_start dates (milliseconds since epoch)
+    """
+    if in_ic_paths == ['GRIDMET/DROUGHT']:
+        
+        # Read-in gridmet drought image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+        
+    elif in_ic_paths == ['IDAHO_EPSCOR/GRIDMET']:
+        
+        # Read-in gridmet drought image collection (temporal cadence of gridmet is matched to gridmet drought), filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection('GRIDMET/DROUGHT').filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+        
+        if in_ic_paths == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-v3']:
+            
+            # Read-in RAP Cover or Production image collection, filter dates, and return client-side list of dates
+            in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+            return(in_ic.aggregate_array('system:time_start').getInfo())
+        
+        elif in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+
+            # Read in RAP 16-day Production image collection, filter dates, and return client-side list of dates
+            in_ic = ee.ImageCollection(in_ic_paths[0]).merge(ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')).filterDate(start_date, end_date)
+            return(in_ic.aggregate_array('system:time_start').getInfo())
+
+    elif in_ic_paths == ['projects/climate-engine/usdm/weekly']:
+            
+        # Read-in USDM image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date).filter(ee.Filter.eq('region', 'conus'))
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['MODIS/061/MOD11A2']:
+        
+        # Read-in MODIS LST image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LC09/C02/T1_L2']:
+        
+        # Read-in RAP 16-day Production image collection (to match temporal cadence to), filter dates, and return client-side list of dates
+        # Get RAP dates to match temporal cadence to
+        in_ic = ee.ImageCollection("projects/rap-data-365417/assets/npp-partitioned-16day-v3").merge(ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())   
+        
+    elif in_ic_paths == ['MODIS/006/MOD16A2']:
+    
+        # Read-in MODIS ET image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['projects/climate-engine-pro/assets/mtbs_mosaics_annual']:
+
+        # Read-in MTBS image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+
+
 # Function to calculate short-term and long-term blends
-def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
+def preprocess_gm_drought(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Read-in gridmet drought image collection
@@ -77,7 +141,7 @@ def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
     
     # Map function to calculate drought blend
     # Filter for dates without NAs for the long term blend
-    out_ic = in_ic.filterDate(start_date, end_date).map(generate_gm_drought_imgs)
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).map(generate_gm_drought_imgs)
     
     # Convert Image Collection to multi-band image
     out_i = out_ic.toBands()
@@ -94,41 +158,37 @@ def preprocess_gm_drought(in_ic_paths, var_name, start_date, end_date):
     
     return(out_i)
 
+
 # Function to preprocess GridMET
-def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days = 5):
+def preprocess_gm(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
-    :param aggregation_days: e.g. aggregation period for the specified variable
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
-    # Read-in gridmet image collection
-    in_ic = ee.ImageCollection(in_ic_paths[0])
-    
-    # Filter for collection for images in date range and select variable of interest
-    out_ic = in_ic.filterDate(start_date, end_date)
-    
     # Get GridMET drought dates to match temporal cadence to
-    gm_drought = ee.ImageCollection("GRIDMET/DROUGHT").filterDate(start_date, end_date)
+    gm_drought = ee.ImageCollection("GRIDMET/DROUGHT").filter(ee.Filter.eq('system:time_start', date))
     gm_drought_dates = gm_drought.aggregate_array('system:time_start')
 
-    # Function to aggregate statistics over the day range based on aggregation_days arg
+    # Read-in gridmet image collection
+    in_ic = ee.ImageCollection(in_ic_paths[0])
+
+    # Function to aggregate statistics over the day range from GridMET drought
     def aggregate_over_dates(date):
         
-        # Filter for next five days
+        # Filter for previous five days
         date = ee.Date(date)
-        out_ic_aggregate = out_ic.filterDate(date, date.advance(aggregation_days, 'day'))
+        in_ic_aggregate = in_ic.filterDate(date.advance(-5, 'day'), date)
     
         # Aggregate variables over that time and convert temperature to celsius
-        pr_img = out_ic_aggregate.select('pr').reduce(ee.Reducer.sum()).rename(['precip'])
-        tmmn_img = out_ic_aggregate.select('tmmn').reduce(ee.Reducer.mean()).rename(['tmmn']).subtract(273.15)
-        tmmx_img = out_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx']).subtract(273.15)
-        eto_img = out_ic_aggregate.select('eto').reduce(ee.Reducer.sum()).rename(['eto'])
-        vpd_img = out_ic_aggregate.select('vpd').reduce(ee.Reducer.mean()).rename(['vpd'])
-        wind_img = out_ic_aggregate.select('vs').reduce(ee.Reducer.mean()).rename(['windspeed'])
-        solar_img = out_ic_aggregate.select('srad').reduce(ee.Reducer.mean()).rename(['srad'])
+        pr_img = in_ic_aggregate.select('pr').reduce(ee.Reducer.sum()).rename(['precip'])
+        tmmn_img = in_ic_aggregate.select('tmmn').reduce(ee.Reducer.mean()).rename(['tmmn']).subtract(273.15)
+        tmmx_img = in_ic_aggregate.select('tmmx').reduce(ee.Reducer.mean()).rename(['tmmx']).subtract(273.15)
+        eto_img = in_ic_aggregate.select('eto').reduce(ee.Reducer.sum()).rename(['eto'])
+        vpd_img = in_ic_aggregate.select('vpd').reduce(ee.Reducer.mean()).rename(['vpd'])
+        wind_img = in_ic_aggregate.select('vs').reduce(ee.Reducer.mean()).rename(['windspeed'])
+        solar_img = in_ic_aggregate.select('srad').reduce(ee.Reducer.mean()).rename(['srad'])
     
         return(pr_img.addBands(tmmn_img).addBands(tmmx_img).addBands(eto_img).addBands(vpd_img).addBands(wind_img).addBands(solar_img)\
                 .set('system:time_start', date)\
@@ -149,12 +209,11 @@ def preprocess_gm(in_ic_paths, var_name, start_date, end_date, aggregation_days 
 
 
 # Function to preprocess RAP data 
-def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
+def preprocess_rap(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Function to convert NPP to aboveground biomass
@@ -214,7 +273,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         in_ic = ee.ImageCollection(in_ic_paths[0])
         
         # Filter for collection for images in date range and select variable of interest
-        out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+        out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
         
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
@@ -234,7 +293,7 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(rap_annual_biomass_function)
 
         # Filter for collection for images in date range and select variable of interest
-        out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+        out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
 
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
@@ -250,17 +309,17 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
     
     elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-16day-v3':
 
-        #Read in provisional data
-        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP']).map(rap_16day_biomass_function)
+        # Read in provisional data
+        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP'])
 
-        # Read-in rap image collection and map function over bands
-        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(rap_16day_biomass_function)
+        # Read-in rap image collection 
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP'])
         
-        #Merge
-        merged_ic = prov_ic.merge(in_ic)
+        # Merge filter by system:time_start and map function over bands
+        merged_ic = in_ic.merge(prov_ic).filter(ee.Filter.eq('system:time_start', date)).map(rap_16day_biomass_function)
 
         # Filter for dates without NAs for the long term blend
-        out_ic = merged_ic.filterDate(start_date, end_date).select(var_name)
+        out_ic = merged_ic.select(var_name)
     
         # Convert Image Collection to multi-band image
         out_i = out_ic.toBands()
@@ -278,19 +337,18 @@ def preprocess_rap(in_ic_paths, var_name, start_date, end_date):
         return(out_i)
 
 # Function to preprocess usdm
-def preprocess_usdm(in_ic_paths, var_name, start_date, end_date):
+def preprocess_usdm(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Read-in usdm image collection
     in_ic = ee.ImageCollection(in_ic_paths[0])
 
     # Filter for collection for images in date range and select variable of interest
-    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
 
     # Filter for CONUS
     out_ic = out_ic.filter(ee.Filter.eq('region', 'conus'))
@@ -309,19 +367,18 @@ def preprocess_usdm(in_ic_paths, var_name, start_date, end_date):
 
 
 # Function to preprocess MODIS TERRA NET ET 16-day
-def preprocess_modet(in_ic_paths, var_name, start_date, end_date):
+def preprocess_modet(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Read-in MODIS ET image collection
     in_ic = ee.ImageCollection(in_ic_paths[0])
 
     #Filter for collection for images in date range and select variable of interest
-    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
     
     # Convert Image Collection to multi-band image
     out_i = out_ic.toBands()
@@ -335,20 +392,20 @@ def preprocess_modet(in_ic_paths, var_name, start_date, end_date):
     
     return(out_i)
 
+
 # Function to preprocess MODIS LST
-def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
+def preprocess_modlst(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Read-in MODIS LST image collection
     in_ic = ee.ImageCollection(in_ic_paths[0])
 
     #Filter for collection for images in date range and select variable of interest
-    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
     
     # Convert Image Collection to multi-band image
     out_i = out_ic.toBands()
@@ -365,11 +422,22 @@ def preprocess_modlst(in_ic_paths, var_name, start_date, end_date):
     
     return(out_i)
 
-# Function to preprocess ls ndvi median composites
-def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
 
+# Function to preprocess ls ndvi median composites
+def preprocess_lsndvi(in_ic_paths, var_name, date, in_fc):
+    """
+    :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
+    :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
+    :param in_fc: input feature collection for generating bounding box (convex hull)
+    :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
+    """
     # Property List
     property_list = ["system:index", "system:time_start"]
+
+    # Get RAP dates to match temporal cadence to
+    rap_16day = ee.ImageCollection("projects/rap-data-365417/assets/npp-partitioned-16day-v3").merge(ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')).filter(ee.Filter.eq('system:time_start', date))
+    date = rap_16day.aggregate_array('system:time_start').get(0)
 
     # Unpack paths
     ic5,ic7,ic8,ic9 = in_ic_paths
@@ -380,10 +448,10 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
     in_fc_bbox = ee.FeatureCollection(in_fc.map(bbox)).geometry().convexHull(10)
     
     #Create image collections from paths
-    ic5_ic = ee.ImageCollection(ic5).filterBounds(in_fc_bbox)
-    ic7_ic = ee.ImageCollection(ic7).filterBounds(in_fc_bbox)
-    ic8_ic = ee.ImageCollection(ic8).filterBounds(in_fc_bbox)
-    ic9_ic = ee.ImageCollection(ic9).filterBounds(in_fc_bbox)
+    ic5_ic = ee.ImageCollection(ic5).filterBounds(in_fc_bbox).filterDate(date, ee.Date(date).advance(16, 'day'))
+    ic7_ic = ee.ImageCollection(ic7).filterBounds(in_fc_bbox).filterDate(date, ee.Date(date).advance(16, 'day'))
+    ic8_ic = ee.ImageCollection(ic8).filterBounds(in_fc_bbox).filterDate(date, ee.Date(date).advance(16, 'day'))
+    ic9_ic = ee.ImageCollection(ic9).filterBounds(in_fc_bbox).filterDate(date, ee.Date(date).advance(16, 'day'))
 
     # Define processing functions 
     # CloudMask
@@ -456,7 +524,6 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
             .copyProperties(img, property_list)
         )
 
-
     def landsat7_sr_band_func(img):
         """
         Change band order to match Landsat 8
@@ -474,7 +541,6 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
             .addBands(img.select(["QA_PIXEL"], ["QA_PIXEL"]))
             .copyProperties(img, property_list)
         )
-
 
     def landsat8_sr_band_func(img):
         """
@@ -510,11 +576,7 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
     collection = collection.merge(out_ic7)
     collection = collection.merge(out_ic8)
     collection = collection.merge(out_ic9)
-    out_ic = ee.ImageCollection(collection).filterDate(start_date, end_date).select(var_name)
-
-    # Get RAP dates to match temporal cadence to
-    rap_16day = ee.ImageCollection("projects/rap-data-365417/assets/npp-partitioned-16day-v3").filterDate(start_date, end_date)
-    rap_16day_dates = rap_16day.aggregate_array('system:time_start')
+    out_ic = ee.ImageCollection(collection).select(var_name)
 
     # Define function to generate median NDVI composites
     def collection_maker_16day(date):
@@ -524,7 +586,7 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
         return (ndviMedian.set('system:time_start', date).set('system:index', date.format('YYYYMMdd'))).setDefaultProjection(out_ic.first().projection())
 
     # Apply function to dates list
-    collection = ee.ImageCollection(rap_16day_dates.map(collection_maker_16day)).select(var_name)
+    collection = ee.ImageCollection(ee.List([date]).map(collection_maker_16day)).select(var_name)
     
     # Convert Image Collection to multi-band image
     out_i = collection.toBands()
@@ -540,19 +602,18 @@ def preprocess_lsndvi(in_ic_paths, var_name, start_date, end_date, in_fc):
     return(out_i)
 
 # Function to preprocess MTBS
-def preprocess_mtbs(in_ic_paths, var_name, start_date, end_date):
+def preprocess_mtbs(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
-    :param start_date: e.g. datetime.datetime(2022, 1, 1)
-    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
     # Read-in mtbs image collection
     in_ic = ee.ImageCollection(in_ic_paths[0])
 
     # Filter for collection for images in date range and select variable of interest
-    out_ic = in_ic.filterDate(start_date, end_date).select(var_name)
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
     
     # Convert Image Collection to multi-band image
     out_i = out_ic.toBands()
