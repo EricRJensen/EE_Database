@@ -1,16 +1,85 @@
 import ee
+import eeDatabase_collectionMethods as eedb_col
 
-# Apply function to select ID column and convert the ID string to numeric
-def generate_id_img(in_fc, in_fc_id):
+
+def get_collection_dates(in_ic_paths, start_date, end_date):
     """
-    :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
-    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
+    :param start_date: e.g. datetime.datetime(2022, 1, 1)
+    :param end_date: e.g. datetime.datetime(2022, 5, 1)
+    :return: Client-side list of system:time_start dates (milliseconds since epoch)
+    """
+    if in_ic_paths == ['GRIDMET/DROUGHT']:
+        
+        # Read-in gridmet drought image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+        
+    elif in_ic_paths == ['IDAHO_EPSCOR/GRIDMET']:
+        
+        # Read-in gridmet drought image collection (temporal cadence of gridmet is matched to gridmet drought), filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection('GRIDMET/DROUGHT').filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+        
+        if in_ic_paths == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-v3']:
+            
+            # Read-in RAP Cover or Production image collection, filter dates, and return client-side list of dates
+            in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+            return(in_ic.aggregate_array('system:time_start').getInfo())
+        
+        elif in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+
+            # Read in RAP 16-day Production image collection, filter dates, and return client-side list of dates
+            in_ic = ee.ImageCollection(in_ic_paths[0]).merge(ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')).filterDate(start_date, end_date)
+            return(in_ic.aggregate_array('system:time_start').getInfo())
+
+    elif in_ic_paths == ['projects/climate-engine/usdm/weekly']:
+            
+        # Read-in USDM image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date).filter(ee.Filter.eq('region', 'conus'))
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['MODIS/061/MOD11A2']:
+        
+        # Read-in MODIS LST image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LC09/C02/T1_L2']:
+        
+        # Read-in RAP 16-day Production image collection (to match temporal cadence to), filter dates, and return client-side list of dates
+        # Get RAP dates to match temporal cadence to
+        in_ic = ee.ImageCollection("projects/rap-data-365417/assets/npp-partitioned-16day-v3").merge(ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional')).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())   
+        
+    elif in_ic_paths == ['MODIS/006/MOD16A2']:
+    
+        # Read-in MODIS ET image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['projects/climate-engine-pro/assets/mtbs_mosaics_annual']:
+
+        # Read-in MTBS image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
+
+
+def generate_id_img(in_fc_path, in_fc_id):
+    """
+    :param in_fc_path: e.g. path to input feature collection
+    :param in_fc_id: e.g. field from input feature collection to use as ID
     :return: Earth Engine image of pixels at the equator with values for land unit ID
     """
     # Function to select ID band
     def select_id(f):
         fc_id = in_fc_id
         return(f.select([fc_id]).set(fc_id, ee.Number.parse(f.get(fc_id))))
+    
+    # Cast in_fc_path to feature collection
+    in_fc = ee.FeatureCollection(in_fc_path)
     in_fc = in_fc.map(select_id)
 
     # Convert feature collection to list
@@ -47,7 +116,6 @@ def generate_id_img(in_fc, in_fc_id):
     return(ee.List([id_i, out_fc]))
 
 
-# Function to return feature time-series as centroid feature collection for continuous variables
 def img_to_pts_continuous(in_i, in_fc):
     """
     :param in_i: e.g. Image for single date
@@ -102,7 +170,6 @@ def img_to_pts_continuous(in_i, in_fc):
     return(equator_fc)
 
 
-# Function to generate series image collection from feature collections
 def pts_to_img_continuous(in_fc):
     """
     :param in_fc: e.g. Output of .img_to_pts_continuous()
@@ -126,7 +193,7 @@ def pts_to_img_continuous(in_fc):
     
     return(img_mb)
 
-# Function to return feature time-series as centroid feature collection for continuous variables
+
 def img_to_pts_categorical(in_i, in_fc, in_ic_name):
     """
     :param in_i: e.g. Image for single date
@@ -186,7 +253,7 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
         
         return(f.set(histogram))
     
-    #Clean up histogram and set as properties
+    # Clean up histogram and set as properties
     img_rr = img_rr.map(process_histogram).select(['c.*'])
 
     # Add values of 0 for any histogram classes without values
@@ -236,11 +303,10 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
     return(equator_fc)
 
 
-# Function to generate series image collection from feature collections
 def pts_to_img_categorical(in_fc, in_ic_name):
     '''
     :param in_fc: e.g. output of img_to_pts_categorical
-    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :param in_ic_name: e.g. input image collection name for applying logic
     :return: Earth Engine image of pixels at the equator with bands for histogram bins
     '''
     # Cast to FeatureCollections
@@ -296,11 +362,11 @@ def pts_to_img_categorical(in_fc, in_ic_name):
     return(img_mb)
 
 
-# Export ID image to new Image Collection
-def export_img(out_i, out_region, out_path, out_id, properties):
+def export_img(out_i, out_region, out_path, properties):
     '''
     :param out_i: e.g. Image to export returned from .pts_to_img*()
-    :param out_fc: e.g. Feature Collection at equator returned from .img_to_pts*()
+    :param out_region: e.g. Feature Collection at equator returned from .img_to_pts*()
+    :param out_path: e.g. path for exported GEE asset
     :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
     :return: Earth Engine image of pixels at the equator with bands for histogram bins
     '''
@@ -309,6 +375,7 @@ def export_img(out_i, out_region, out_path, out_id, properties):
     var_name_exp = properties.get('var_name').replace('_', '').lower()
     in_ic_name_exp = properties.get('in_ic_name').replace('_', '').lower()
     land_unit_exp = properties.get('land_unit_short').replace('_', '').lower()
+    out_id = properties.get('system:index')
 
     # Queue and start export task
     task = ee.batch.Export.image.toAsset(
@@ -319,3 +386,123 @@ def export_img(out_i, out_region, out_path, out_id, properties):
         scale = 22.264,
         maxPixels = 1e13)
     task.start()
+
+
+def initialize_collection(out_path, properties):
+    '''
+    :param out_path: e.g. path for exported GEE asset 
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :output: Earth Engine image asset export task
+    '''
+    # Apply ID image function to input feature collection
+    out_list = generate_id_img(in_fc_path = properties.get('in_fc_path'), in_fc_id = properties.get('in_fc_id'))
+    out_i = ee.Image(out_list.get(0))
+    out_fc = ee.FeatureCollection(out_list.get(1))
+
+    # Pull args out of properties for string parsing below
+    land_unit_short = properties.get('land_unit_short')
+    in_ic_name = properties.get('in_ic_name')
+    var_name = properties.get('var_name')
+    
+    # Generate empty Image Collection asset to append images
+    os.system(f"earthengine create collection {out_path}")
+    
+    # Export ID image to new Image Collection
+    task = ee.batch.Export.image.toAsset(
+        image = out_i.set(properties),
+        description = f"initialize - {land_unit_short.replace('_', '').lower()} {in_ic_name.replace('_', '').lower()} {var_name.replace('_', '').lower()} - id",
+        assetId = out_path + '/0_id',
+        region = out_fc.geometry().buffer(20),
+        scale = 22.264,
+        maxPixels = 1e13)
+    task.start()
+
+
+def run_image_export(date, out_path, properties):
+    '''
+    :param date: e.g. millis since epoch for initial image that output represents
+    :param out_path: e.g. path for exported GEE asset 
+    :param properties: e.g. {'land-unit': land_unit, 'in-fc-path': in_fc_path, "in-fc-id": in_fc_id, "in-ic-paths": in_ic_path, "var-type": var_type, "var-name": var_name}
+    :output: Earth Engine image asset export task
+    '''
+
+    # ----- Preprocess input Image Collection based on path for each date -----
+
+    if properties.get('in_ic_path') == ['GRIDMET/DROUGHT']:
+
+        # Run function to pre-process the GridMET drought data
+        in_i = eedb_col.preprocess_gm_drought(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_path') == ['IDAHO_EPSCOR/GRIDMET']:
+        
+        # Run function to pre-process the GridMET data
+        in_i = eedb_col.preprocess_gm(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_path') == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or properties.get('in_ic_path') == ['projects/rap-data-365417/assets/npp-partitioned-v3'] or properties.get('in_ic_path') == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+
+        # Run function to pre-process the RAP data
+        in_i = eedb_col.preprocess_rap(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_path') == ['projects/climate-engine/usdm/weekly']:
+
+        # Run function to pre-process the USDM data
+        in_i = eedb_col.preprocess_usdm(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_path') == ['MODIS/061/MOD11A2']:
+
+        # Run function to pre-process the MODIS LST data
+        in_i = eedb_col.preprocess_modlst(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_paths') == ['LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LC09/C02/T1_L2']:
+        
+        # Cast in_fc_path to feature collection
+        in_fc = ee.FeatureCollection(in_ic_paths = properties.get('in_fc_path'))
+
+        # Run function to pre-process the Landsat SR NDVI data
+        in_i = eedb_col.preprocess_lsndvi(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date, in_fc = in_fc)
+
+    elif properties.get('in_ic_path') == ['MODIS/006/MOD16A2']:
+
+        # Run function to pre-process the MODIS ET data
+        in_i = eedb_col.preprocess_modet(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+    elif properties.get('in_ic_path') == ['projects/climate-engine-pro/assets/mtbs_mosaics_annual']:
+
+        # Run function to pre-process the MTBS data
+        in_i = eedb_col.preprocess_mtbs(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+
+
+    # ---------------------------- Apply functions to output image ---------------------------------
+
+    # Conditionally apply mask to images
+    if properties.get('mask') == 'None':
+        # Do not apply mask
+        in_i = in_i
+    else:
+        # Apply mask
+        in_i = in_i.updateMask(ee.Image(properties.get('mask')))
+
+    # Cast in_fc_path to feature collection
+    in_fc = ee.FeatureCollection(properties.get('in_fc_path'))
+
+    if properties.get('var_type') == 'Continuous':
+
+        # Run function to get time-series statistics for input feature collection
+        out_fc = img_to_pts_continuous(in_i = in_i, in_fc = in_fc)
+
+        # Convert centroid time-series to image collection time-series
+        out_i = pts_to_img_continuous(in_fc = out_fc)
+
+    elif properties.get('var_type') == 'Categorical':
+
+        # Run function to get time-series statistics for input feature collection for continuous variables
+        out_fc = img_to_pts_categorical(in_i = in_i, in_fc = in_fc, in_ic_name = properties.get('in_ic_name'))
+
+        # Convert centroid time-series to image collection time-series
+        out_i = pts_to_img_categorical(in_fc = out_fc, in_ic_name = properties.get('in_ic_name'))
+
+    # Create out region for export
+    out_region = out_fc.geometry().buffer(20)
+
+    # Export the image
+    export_img(out_i = out_i, out_region = out_region, out_path = out_path, properties = properties)
