@@ -1,6 +1,6 @@
 import ee
+import os
 import eeDatabase_collectionMethods as eedb_col
-
 
 def get_collection_dates(in_ic_paths, start_date, end_date):
     """
@@ -418,7 +418,7 @@ def initialize_collection(out_path, properties):
     task.start()
 
 
-def run_image_export(date, out_path, properties):
+def run_image_export(in_ic_paths, date, out_path, properties):
     '''
     :param date: e.g. millis since epoch for initial image that output represents
     :param out_path: e.g. path for exported GEE asset 
@@ -428,59 +428,59 @@ def run_image_export(date, out_path, properties):
 
     # ----- Preprocess input Image Collection based on path for each date -----
 
-    if properties.get('in_ic_path') == ['GRIDMET/DROUGHT']:
+    if in_ic_paths == ['GRIDMET/DROUGHT']:
 
         # Run function to pre-process the GridMET drought data
-        in_i = eedb_col.preprocess_gm_drought(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_gm_drought(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_path') == ['IDAHO_EPSCOR/GRIDMET']:
+    elif in_ic_paths == ['IDAHO_EPSCOR/GRIDMET']:
         
         # Run function to pre-process the GridMET data
-        in_i = eedb_col.preprocess_gm(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_gm(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_path') == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or properties.get('in_ic_path') == ['projects/rap-data-365417/assets/npp-partitioned-v3'] or properties.get('in_ic_path') == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
+    elif in_ic_paths == ['projects/rap-data-365417/assets/vegetation-cover-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-v3'] or in_ic_paths == ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']:
 
         # Run function to pre-process the RAP data
-        in_i = eedb_col.preprocess_rap(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_rap(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_path') == ['projects/climate-engine/usdm/weekly']:
+    elif in_ic_paths == ['projects/climate-engine/usdm/weekly']:
 
         # Run function to pre-process the USDM data
-        in_i = eedb_col.preprocess_usdm(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_usdm(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_path') == ['MODIS/061/MOD11A2']:
+    elif in_ic_paths == ['MODIS/061/MOD11A2']:
 
         # Run function to pre-process the MODIS LST data
-        in_i = eedb_col.preprocess_modlst(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_modlst(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_paths') == ['LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LC09/C02/T1_L2']:
+    elif in_ic_paths == ['LANDSAT/LT05/C02/T1_L2', 'LANDSAT/LE07/C02/T1_L2', 'LANDSAT/LC08/C02/T1_L2', 'LANDSAT/LC09/C02/T1_L2']:
         
         # Cast in_fc_path to feature collection
         in_fc = ee.FeatureCollection(in_ic_paths = properties.get('in_fc_path'))
 
         # Run function to pre-process the Landsat SR NDVI data
-        in_i = eedb_col.preprocess_lsndvi(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date, in_fc = in_fc)
+        in_i = eedb_col.preprocess_lsndvi(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date, in_fc = in_fc)
 
-    elif properties.get('in_ic_path') == ['MODIS/006/MOD16A2']:
+    elif in_ic_paths == ['MODIS/006/MOD16A2']:
 
         # Run function to pre-process the MODIS ET data
-        in_i = eedb_col.preprocess_modet(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_modet(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
-    elif properties.get('in_ic_path') == ['projects/climate-engine-pro/assets/mtbs_mosaics_annual']:
+    elif in_ic_paths == ['projects/climate-engine-pro/assets/mtbs_mosaics_annual']:
 
         # Run function to pre-process the MTBS data
-        in_i = eedb_col.preprocess_mtbs(in_ic_paths = properties.get('in_ic_paths'), var_name = properties.get('var_name'), date = date)
+        in_i = eedb_col.preprocess_mtbs(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
 
     # ---------------------------- Apply functions to output image ---------------------------------
 
     # Conditionally apply mask to images
-    if properties.get('mask') == 'None':
+    if properties.get('mask_path') == 'None':
         # Do not apply mask
         in_i = in_i
     else:
         # Apply mask
-        in_i = in_i.updateMask(ee.Image(properties.get('mask')))
+        in_i = in_i.updateMask(ee.Image(properties.get('mask_path')))
 
     # Cast in_fc_path to feature collection
     in_fc = ee.FeatureCollection(properties.get('in_fc_path'))

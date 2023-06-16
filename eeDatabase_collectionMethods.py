@@ -1,6 +1,5 @@
 import ee
 
-
 # Function to calculate short-term and long-term blends
 def preprocess_gm_drought(in_ic_paths, var_name, date):
     """
