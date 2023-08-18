@@ -77,7 +77,7 @@ def generate_id_img(in_fc_path, in_fc_id):
     def select_id(f):
         fc_id = in_fc_id
         return(f.select([fc_id]).set(fc_id, ee.Number.parse(f.get(fc_id))))
-    
+
     # Cast in_fc_path to feature collection
     in_fc = ee.FeatureCollection(in_fc_path)
     in_fc = in_fc.map(select_id)
@@ -116,7 +116,7 @@ def generate_id_img(in_fc_path, in_fc_id):
     return(ee.List([id_i, out_fc]))
 
 
-def img_to_pts_continuous(in_i, in_fc):
+def img_to_pts_continuous(in_i, in_fc, tile_scale):
     """
     :param in_i: e.g. Image for single date
     :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
@@ -141,7 +141,7 @@ def img_to_pts_continuous(in_i, in_fc):
     img_rr = img.reduceRegions(collection = in_fc, reducer = ee.Reducer.percentile([5, 25, 50, 75, 95])\
                                 .combine(reducer2 = ee.Reducer.mean(), sharedInputs = True),\
                                 scale = res,\
-                                tileScale = 16).select(['mean', 'p.*'])
+                                tileScale = tile_scale).select(['mean', 'p.*'])
     
     # Get list of RR features
     img_rr_list = img_rr.toList(img_rr.size())
@@ -194,7 +194,7 @@ def pts_to_img_continuous(in_fc):
     return(img_mb)
 
 
-def img_to_pts_categorical(in_i, in_fc, in_ic_name):
+def img_to_pts_categorical(in_i, in_fc, in_ic_name, tile_scale):
     """
     :param in_i: e.g. Image for single date
     :param in_fc: e.g. ee.FeatureCollection(in_fc_path)
@@ -233,7 +233,7 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name):
     # Run reduce regions for allotments and select only the columns with reducers
     img_rr = img.reduceRegions(collection = in_fc, reducer = ee.Reducer.frequencyHistogram(),\
                                 scale = res,\
-                                tileScale = 16).select(['histogram'])
+                                tileScale = tile_scale).select(['histogram'])
     
     # Function to process histogram and key names to set as properties
     def process_histogram(f):
@@ -488,7 +488,7 @@ def run_image_export(in_ic_paths, date, out_path, properties):
     if properties.get('var_type') == 'Continuous':
 
         # Run function to get time-series statistics for input feature collection
-        out_fc = img_to_pts_continuous(in_i = in_i, in_fc = in_fc)
+        out_fc = img_to_pts_continuous(in_i = in_i, in_fc = in_fc, tile_scale = properties.get('tile_scale'))
 
         # Convert centroid time-series to image collection time-series
         out_i = pts_to_img_continuous(in_fc = out_fc)
@@ -496,7 +496,7 @@ def run_image_export(in_ic_paths, date, out_path, properties):
     elif properties.get('var_type') == 'Categorical':
 
         # Run function to get time-series statistics for input feature collection for continuous variables
-        out_fc = img_to_pts_categorical(in_i = in_i, in_fc = in_fc, in_ic_name = properties.get('in_ic_name'))
+        out_fc = img_to_pts_categorical(in_i = in_i, in_fc = in_fc, in_ic_name = properties.get('in_ic_name'), tile_scale = properties.get('tile_scale'))
 
         # Convert centroid time-series to image collection time-series
         out_i = pts_to_img_categorical(in_fc = out_fc, in_ic_name = properties.get('in_ic_name'))
