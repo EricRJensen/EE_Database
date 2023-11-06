@@ -155,7 +155,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
 
         # NPP scalar, KgC to lbsC, m2 to acres, fraction of NPP aboveground, C to biomass
         agb = img.multiply(0.0001).multiply(2.20462).multiply(4046.86).multiply(fANPP).multiply(2.1276)\
-            .rename(['afgAGB', 'pfgAGB', 'shrAGB'])\
+            .rename(['afgAGB', 'pfgAGB'])\
             .copyProperties(img, ['system:time_start'])\
             .set('year', year)
             
@@ -189,7 +189,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
             .multiply(4046.86)\
             .multiply(fANPP)\
             .multiply(2.1276)\
-            .rename(['afgAGB', 'pfgAGB', 'shrAGB'])\
+            .rename(['afgAGB', 'pfgAGB'])\
             .copyProperties(image, ['system:time_start'])\
             .set('year', year)
 
@@ -220,7 +220,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
     elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-v3':
         
         # Read-in rap image collection and map function over bands
-        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP', 'shrNPP']).map(rap_annual_biomass_function)
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP']).map(rap_annual_biomass_function)
 
         # Filter for collection for images in date range and select variable of interest
         out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
@@ -243,7 +243,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
         prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP'])
 
         # Read-in rap image collection 
-        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP', 'shrNPP'])
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP'])
         
         # Merge filter by system:time_start and map function over bands
         merged_ic = in_ic.merge(prov_ic).filter(ee.Filter.eq('system:time_start', date)).map(rap_16day_biomass_function)
