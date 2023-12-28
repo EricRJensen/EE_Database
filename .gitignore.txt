@@ -1,8 +1,0 @@
-# Ignore Mac system files
-.DS_store
-
-# Ignore python notebook files
-.ipynb_checkpoints
-
-# Ignore pycache
-__pycache__/
