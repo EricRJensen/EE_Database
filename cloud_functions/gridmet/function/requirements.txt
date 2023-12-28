@@ -1,0 +1,4 @@
+earthengine-api>=0.1.315
+flask
+openet-refet-gee==0.3.1
+google-cloud-tasks
