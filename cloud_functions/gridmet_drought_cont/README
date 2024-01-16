@@ -1,0 +1,113 @@
+# GridMET database function
+
+## Assets
+
+Collection ID: projects/climate-engine/rtma/daily
+
+Timestep: daily
+
+Image name format: YYYYMMDD
+
+### Bands
+
+| Band | Description | Units |
+| --- | ----------- | ----- |
+| TMAX | Maximum Air Temperature | C |
+| TMIN | Minimum Air Temperature | C |
+| SRAD | Incoming shortwave solar radiation (average daily) | W m-2 |
+| SPH | Specific humidity | kg kg-1 |
+| WIND | Wind speed, 10-meter | m s-1 |
+| WDIR | Wind direction (from which blowing) | deg true |
+| TCDC | Total cloud cover | % |
+| PRES | Air pressure | Pa |
+| DPT | Dew Point | C |
+| ETo | Grass Reference ET | mm |
+| ETr | Alfalfa Reference ET | mm | 
+| PRCP | Precipitation | mm |
+
+### Daily Aggregation
+
+The daily aggregation starts (and ends) at 6 UTC to better represent the day for the CONUS.
+
+Wind direction was computed using a circular mean function.
+
+Reference ET was computed from the daily aggregated values (see [Reference ET](#Reference ET)).
+
+### Availability
+
+Current: 2015-06-18 to present.
+
+There is hourly RTMA data available starting on 2015-06-18.
+
+### Update Schedule
+
+Daily at 1 AM PT
+
+### Source
+
+Hourly RTMA image collection: NOAA/NWS/RTMA
+
+### Spatial Extent
+
+The grid for the source RTMA hourly assets starting on 2018-12-05 was changed to the "Western Expansion NDFD grid" that includes more of Canada.  For now, all daily assets are being built to the original (smaller) NDFD grid.  
+
+## Ancillary Data
+
+### Solar Radiation
+
+The hourly RTMA data does not include incoming solar radiation.  In order to compute reference ET, the aggregated daily solar radiation from NLDAS is being resampled/reprojected and included in the RTMA daily assets. 
+
+### Elevation
+
+Currently a single elevation image is being used for computing reference ET.  This image asset was copied from the "HGT" band in the image "NOAA/NWS/RTMA/2019070119".  The ingest could be modified to use the HGT band from each image directly.
+
+## Reference ET
+
+Reference ET is being computed at the daily timestep (not at the hourly) using the [openet-refet-gee](https://pypi.org/project/openet-refet-gee/) module.
+
+## Cloud Function
+
+The asset ingest is currently being managed using Google Cloud Functions.
+
+### Deploying the cloud function
+
+Before deploying or calling the cloud functions, the "project" can be set once with the following call, or passed to each gcloud call.
+```
+gcloud config set project clim-engine
+```
+
+The following are the parameters that were set when deploying the function for the first time.  Subsequent deployments only need the project if not set above.
+```
+gcloud functions deploy rtma-daily-asset --project clim-engine --runtime python37 --entry-point cron_scheduler --trigger-http --memory 256 --timeout 540 --service-account="clim-engine@appspot.gserviceaccount.com" --max-instances 1 --allow-unauthenticated
+```
+
+### Calling the cloud function
+
+The functions can be called by passing JSON data to the function.
+```
+gcloud functions call rtma-daily-asset --data '{"start":"2020-10-01","end":"2020-10-05"}'
+```
+
+If no arguments are passed to the scheduler it will check the last 30 days for missing assets.
+```
+gcloud functions call rtma-daily-asset
+```
+
+### Scheduling the job
+
+```
+gcloud scheduler jobs update http rtma-daily-assets --schedule "0 9 * * *" --uri "https://us-central1-clim-engine.cloudfunctions.net/rtma-daily-asset" --description "RTMA Daily Assets" --http-method POST --time-zone "UTC" --project clim-engine --location us-central1 --max-retry-attempts 3
+```
+
+### Create tasks queue
+
+The following command was used to create a "slow" task queue that will only run one task at a time.  This was done to limit the number of simultaneous requests to Earth Engine.  This only needs to be done one time for the entire cloud project.
+
+```
+gcloud tasks queues create ee-assets-slow --max-concurrent-dispatches=1 --max-dispatches-per-second=1 --project clim-engine
+```
+
+The max-burst-size parameter is not currently adjustable from the GCloud CLI, but it may be in the future.
+```
+--max-burst-size=1
+```
