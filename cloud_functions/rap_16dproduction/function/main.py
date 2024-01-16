@@ -30,8 +30,8 @@ def run_export():
     end_date = datetime.datetime(2050, 1, 1)
 
     # Define input Image Collection
-    in_ic_name = 'RAP_Production'
-    in_ic_paths = ['projects/rap-data-365417/assets/npp-partitioned-v3']
+    in_ic_name = 'RAP_16dProduction'
+    in_ic_paths = ['projects/rap-data-365417/assets/npp-partitioned-16day-v3']
     in_ic = ee.ImageCollection(in_ic_paths[0])
     in_ic_res = ee.Number(in_ic.first().projection().nominalScale()).round().getInfo()
 
