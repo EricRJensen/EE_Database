@@ -9,7 +9,6 @@ logging.getLogger('googleapiclient').setLevel(logging.INFO)
 logging.getLogger('requests').setLevel(logging.INFO)
 logging.getLogger('urllib3').setLevel(logging.INFO)
 
-
 def handle_event(event):
     """Triggered from a message on a Cloud Pub/Sub topic.
     Args:
@@ -24,15 +23,15 @@ def handle_event(event):
 
 
 def run_export():
-    """Earth Engine export function
+    """Earth Engine export
     """
     # Define time period to export
     start_date = datetime.datetime(1980, 1, 1)
     end_date = datetime.datetime(2050, 1, 1)
 
     # Define input Image Collection
-    in_ic_name = 'GridMET_Drought_Cont'
-    in_ic_paths = ['GRIDMET/DROUGHT']
+    in_ic_name = 'RAP_Cover'
+    in_ic_paths = ['projects/rap-data-365417/assets/vegetation-cover-v3']
     in_ic = ee.ImageCollection(in_ic_paths[0])
     in_ic_res = ee.Number(in_ic.first().projection().nominalScale()).round().getInfo()
 
@@ -44,28 +43,31 @@ def run_export():
         in_fc, in_fc_path, in_fc_id, land_unit_long, land_unit_short, tile_scale, mask, mask_path = define_parameters(fc_type)
 
         # Define variable from Image Collection
-        var_dict = {'Long_Term_Drought_Blend': {'units': 'drought'},
-                    'Short_Term_Drought_Blend': {'units': 'drought'}}
+        var_dict = {'AFG': {'units': '% cover'},
+                    'BGR': {'units': '% cover'},
+                    'LTR': {'units': '% cover'},
+                    'PFG': {'units': '% cover'},
+                    'SHR': {'units': '% cover'},
+                    'TRE': {'units': '% cover'}}
         
         # Loop over variables
-        var_names = ['Long_Term_Drought_Blend', 'Short_Term_Drought_Blend']
+        var_names = ['AFG', 'BGR', 'LTR', 'PFG', 'SHR', 'TRE']
 
         for var_name in var_names:
 
-            var_type = 'Categorical'
+            var_type = 'Continuous'
             var_units = var_dict.get(var_name).get('units')
 
             out_path = f"projects/climate-engine-pro/assets/blm-database/{land_unit_short.replace('_', '').lower()}-{in_ic_name.replace('_', '').lower()}-{var_name.replace('_', '').lower()}"
         
             # Get list of all dates
-            all_dates = ee.ImageCollection('GRIDMET/DROUGHT').filterDate(start_date, end_date).aggregate_array('system:time_start').getInfo()
+            all_dates = ee.ImageCollection('projects/rap-data-365417/assets/vegetation-cover-v3').filterDate(start_date, end_date).aggregate_array('system:time_start').getInfo()
 
             # Get list of dates from collection
             coll_dates = ee.ImageCollection(out_path).aggregate_array('system:time_start').distinct().getInfo()
 
-            # Get list of dates missing from collection and filter out dates before 1986
+            # Get list of dates missing from collection
             miss_dates = sorted(set(all_dates) - set(coll_dates))
-            miss_dates = [i for i in miss_dates if i >= 504982643000]
 
             for date in miss_dates:
 
@@ -86,7 +88,7 @@ def run_export():
                     properties['mask_path'] = 'None'
         
                 # Generate image to extact statistics from
-                in_i = preprocess_gm_drought(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
+                in_i = preprocess_gm(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
                 # Conditionally apply mask to images
                 if properties.get('mask_path') == 'None':
@@ -216,93 +218,133 @@ def pts_to_img_continuous(in_fc):
     return(img_mb)
 
 
-# Function to calculate short-term and long-term blends
-def preprocess_gm_drought(in_ic_paths, var_name, date):
+# Function to preprocess RAP data 
+def preprocess_rap(in_ic_paths, var_name, date):
     """
     :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
     :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
     :param date: e.g. system:time_start in milliseconds since Unix epoch
     :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
     """
-    # Read-in gridmet drought image collection
-    in_ic = ee.ImageCollection(in_ic_paths[0])
+    # Function to convert NPP to aboveground biomass
+    def rap_annual_biomass_function(img):
 
-    def generate_gm_drought_imgs(img):
+        year = ee.Date(img.get('system:time_start')).format('YYYY')
+        matYear = ee.ImageCollection("projects/rap-data-365417/assets/gridmet-MAT").filterDate(year).first()
+        fANPP = (matYear.multiply(0.0129)).add(0.171).rename('fANPP')
 
-        # Define property list
-        property_list = ["system:index", "system:time_start"]
-        
-        # Define preliminary variables for short-term blend calculation
-        stb_variable = "Short_Term_Drought_Blend"
-        stb_pdsi_img = img.select("pdsi")
-        stb_z_img = img.select("z")
-        stb_spi90d_img = img.select("spi90d")
-        stb_spi30d_img = img.select("spi30d")
-        
-        # Define weights for short-term blend calculation
-        stb_pdsi_coef = 0.2
-        stb_z_coef = 0.35
-        stb_spi90d_coef = 0.25
-        stb_spi30d_coef = 0.2
-        
-        # Calculate short-term blend
-        stblend = stb_pdsi_img.expression(
-            "b() * pdsi_coef / 2 + spi90d * spi90d_coef + spi30d * spi30d_coef + z * z_coef / 2",{
-                "spi90d": stb_spi90d_img, 
-                "spi30d": stb_spi30d_img, 
-                "z": stb_z_img, 
-                "pdsi_coef": stb_pdsi_coef,
-                "spi90d_coef": stb_spi90d_coef, 
-                "spi30d_coef": stb_spi30d_coef, 
-                "z_coef": stb_z_coef})
-        
-        # Define preliminary variables for long-term blend calculation
-        ltb_variable = "Long_Term_Drought_Blend"
-        ltb_pdsi_img = img.select("pdsi")
-        ltb_spi180d_img = img.select("spi180d")
-        ltb_spi1y_img = img.select("spi1y")
-        ltb_spi2y_img = img.select("spi2y")
-        ltb_spi5y_img = img.select("spi5y")
-        
-        # Define weights for long-term blend calculation
-        ltb_pdsi_coef = 0.35
-        ltb_spi180d_coef = 0.15
-        ltb_spi1y_coef = 0.2
-        ltb_spi2y_coef = 0.2
-        ltb_spi5y_coef = 0.1
-        
-        # Calculate short-term blend
-        ltblend = ltb_pdsi_img.expression(
-            "b() * pdsi_coef / 2 + spi180d* spi180d_coef + spi1y * spi1y_coef + spi2y * spi2y_coef + spi5y * spi5y_coef",{
-                "spi180d": ltb_spi180d_img, 
-                "spi1y": ltb_spi1y_img, 
-                "spi2y": ltb_spi2y_img, 
-                "spi5y": ltb_spi5y_img,
-                "spi180d_coef": ltb_spi180d_coef, 
-                "spi1y_coef": ltb_spi1y_coef, 
-                "spi2y_coef": ltb_spi2y_coef,
-                "spi5y_coef": ltb_spi5y_coef, 
-                "pdsi_coef": ltb_pdsi_coef})
-        return ltblend.addBands(stblend).select([0,1], [ltb_variable, stb_variable]).copyProperties(img, property_list)
+        # NPP scalar, KgC to lbsC, m2 to acres, fraction of NPP aboveground, C to biomass
+        agb = img.multiply(0.0001).multiply(2.20462).multiply(4046.86).multiply(fANPP).multiply(2.1276)\
+            .rename(['afgAGB', 'pfgAGB', 'shrAGB'])\
+            .copyProperties(img, ['system:time_start'])\
+            .set('year', year)
+            
+        herbaceous = ee.Image(agb).reduce(ee.Reducer.sum()).rename(['herbaceousAGB'])
+
+        agb = ee.Image(agb).addBands(herbaceous)
+
+        return(agb)
     
-    # Map function to calculate drought blend
-    # Filter for dates without NAs for the long term blend
-    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).map(generate_gm_drought_imgs)
+    # Define function to preprocess RAP NPP 16-day
+    def rap_16day_biomass_function(image):
+
+        # Import GridMET MAT collection
+        mat = ee.ImageCollection("projects/rap-data-365417/assets/gridmet-MAT")
+
+        # Use previous year's MAT to partition between above and below-ground for current year's provisional
+        mat_last = ee.Image(mat.toList(mat.size()).get(mat.size().subtract(1)))
+        mat_last = mat_last\
+            .set("system:time_start", ee.Date(mat_last.get("system:time_start")).advance(1, 'year').millis())\
+            .set("system:index", ee.Date(mat_last.get("system:time_start")).advance(1, 'year').format("YYYY"))
+        mat = ee.ImageCollection(mat.toList(mat.size()).add(mat_last))
+
+        # Select current MAT to partition between above and below-ground
+        year = ee.Date(image.get('system:time_start')).format('YYYY')
+        matYear = mat.filterDate(year).first()
+        fANPP = (matYear.multiply(0.0129)).add(0.171).rename('fANPP')
+
+        # Apply scaling and partitioning factors
+        agb = image.multiply(0.0001)\
+            .multiply(2.20462)\
+            .multiply(4046.86)\
+            .multiply(fANPP)\
+            .multiply(2.1276)\
+            .rename(['afgAGB', 'pfgAGB', 'shrAGB'])\
+            .copyProperties(image, ['system:time_start'])\
+            .set('year', year)
+
+        herbaceous = ee.Image(agb).reduce(ee.Reducer.sum()).rename(['herbaceousAGB'])
+        agb = ee.Image(agb).addBands(herbaceous)
+        return agb
     
-    # Convert Image Collection to multi-band image
-    out_i = out_ic.toBands()
+    if in_ic_paths[0] == 'projects/rap-data-365417/assets/vegetation-cover-v3':
+        
+        # Read-in rap image collection
+        in_ic = ee.ImageCollection(in_ic_paths[0])
+        
+        # Filter for collection for images in date range and select variable of interest
+        out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
+        
+        # Convert Image Collection to multi-band image
+        out_i = out_ic.toBands()
+        
+        # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+        def replace_name(name):
+            return ee.String(name).replace(var_name, '').replace('_', '0101')
+        
+        # Finish cleaning input image
+        out_i = out_i.rename(out_i.bandNames().map(replace_name))
+
+        return(out_i)
     
-    # Select variable to serve as input
-    out_i = out_i.select(['[0-9]{8}_' + var_name])
+    elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-v3':
+        
+        # Read-in rap image collection and map function over bands
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP', 'shrNPP']).map(rap_annual_biomass_function)
+
+        # Filter for collection for images in date range and select variable of interest
+        out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
+
+        # Convert Image Collection to multi-band image
+        out_i = out_ic.toBands()
+
+        # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+        def replace_name(name):
+            return ee.String(name).replace(var_name, '').replace('_', '0101')
+        
+        # Finish cleaning input image
+        out_i = out_i.rename(out_i.bandNames().map(replace_name))
+
+        return(out_i)
     
-    # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
-    def replace_name(name):
-        return ee.String(name).replace(var_name, '').replace('_', '')
+    elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-16day-v3':
+
+        # Read in provisional data
+        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP'])
+
+        # Read-in rap image collection 
+        in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP', 'shrNPP'])
+        
+        # Merge filter by system:time_start and map function over bands
+        merged_ic = in_ic.merge(prov_ic).filter(ee.Filter.eq('system:time_start', date)).map(rap_16day_biomass_function)
+
+        # Filter for dates without NAs for the long term blend
+        out_ic = merged_ic.select(var_name)
     
-    # Finish cleaning input image
-    out_i = out_i.rename(out_i.bandNames().map(replace_name))
+        # Convert Image Collection to multi-band image
+        out_i = out_ic.toBands()
     
-    return(out_i)
+        # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+        def replace_name(name):
+            date_str = ee.String(name).replace(var_name, '').replace('_', '').replace('_', '')
+            date_str = date_str.slice(-7)
+            str_date = ee.Date.parse('YYYYD', date_str).format('YYYYMMdd')
+            return str_date
+    
+        # Finish cleaning input image
+        out_i = out_i.rename(out_i.bandNames().map(replace_name))
+    
+        return(out_i)
 
 
 def define_parameters(level):
