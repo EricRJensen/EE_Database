@@ -58,7 +58,7 @@ def run_export():
             out_path = f"projects/climate-engine-pro/assets/blm-database/{land_unit_short.replace('_', '').lower()}-{in_ic_name.replace('_', '').lower()}-{var_name.replace('_', '').lower()}"
         
             # Get list of all dates
-            all_dates = in_ic = ee.ImageCollection('GRIDMET/DROUGHT').filterDate(start_date, end_date).filterDate(start_date, end_date).aggregate_array('system:time_start').getInfo()
+            all_dates = ee.ImageCollection('GRIDMET/DROUGHT').filterDate(start_date, end_date).filterDate(start_date, end_date).aggregate_array('system:time_start').getInfo()
 
             # Get list of dates from collection
             coll_dates = ee.ImageCollection(out_path).aggregate_array('system:time_start').distinct().getInfo()
