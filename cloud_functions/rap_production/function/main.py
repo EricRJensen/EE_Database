@@ -30,8 +30,8 @@ def run_export():
     end_date = datetime.datetime(2050, 1, 1)
 
     # Define input Image Collection
-    in_ic_name = 'RAP_Cover'
-    in_ic_paths = ['projects/rap-data-365417/assets/vegetation-cover-v3']
+    in_ic_name = 'RAP_Production'
+    in_ic_paths = ['projects/rap-data-365417/assets/npp-partitioned-v3']
     in_ic = ee.ImageCollection(in_ic_paths[0])
     in_ic_res = ee.Number(in_ic.first().projection().nominalScale()).round().getInfo()
 
@@ -43,15 +43,13 @@ def run_export():
         in_fc, in_fc_path, in_fc_id, land_unit_long, land_unit_short, tile_scale, mask, mask_path = define_parameters(fc_type)
 
         # Define variable from Image Collection
-        var_dict = {'AFG': {'units': '% cover'},
-                    'BGR': {'units': '% cover'},
-                    'LTR': {'units': '% cover'},
-                    'PFG': {'units': '% cover'},
-                    'SHR': {'units': '% cover'},
-                    'TRE': {'units': '% cover'}}
+        var_dict = {'afgAGB': {'units': 'lbs/acre'},
+                    'pfgAGB': {'units': 'lbs/acre'},
+                    'shrAGB': {'units': 'lbs/acre'},
+                    'herbaceousAGB': {'units': 'lbs/acre'}}
         
         # Loop over variables
-        var_names = ['AFG', 'BGR', 'LTR', 'PFG', 'SHR', 'TRE']
+        var_names = ['afgAGB', 'pfgAGB', 'shrAGB', 'herbaceousAGB']
 
         for var_name in var_names:
 
@@ -88,7 +86,7 @@ def run_export():
                     properties['mask_path'] = 'None'
         
                 # Generate image to extact statistics from
-                in_i = preprocess_rao(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
+                in_i = preprocess_rap(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
                 # Conditionally apply mask to images
                 if properties.get('mask_path') == 'None':
