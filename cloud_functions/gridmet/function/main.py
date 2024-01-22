@@ -52,7 +52,7 @@ def run_export():
                     'srad': {'units': 'W/m^2'}}
         
         # Loop over variables
-        var_names = ['precip', 'tmmn', 'tmmx', 'eto', 'vpd', 'windspeed', 'srad']
+        var_names = ['precip', 'tmmn', 'tmmx', 'eto', 'vpd', 'windspeed']
 
         for var_name in var_names:
 

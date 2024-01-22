@@ -240,7 +240,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
     elif in_ic_paths[0] == 'projects/rap-data-365417/assets/npp-partitioned-16day-v3':
 
         # Read in provisional data
-        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP'])
+        prov_ic = ee.ImageCollection('projects/rap-data-365417/assets/npp-partitioned-16day-v3-provisional').select(['afgNPP', 'pfgNPP', 'shrNPP'])
 
         # Read-in rap image collection 
         in_ic = ee.ImageCollection(in_ic_paths[0]).select(['afgNPP', 'pfgNPP', 'shrNPP'])
