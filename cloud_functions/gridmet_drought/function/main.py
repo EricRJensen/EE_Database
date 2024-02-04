@@ -2,24 +2,25 @@ import datetime
 import logging
 import ee
 import google.auth
-from flask import abort, Response
 
-logging.getLogger('earthengine-api').setLevel(logging.INFO)
-logging.getLogger('googleapiclient').setLevel(logging.INFO)
-logging.getLogger('requests').setLevel(logging.INFO)
-logging.getLogger('urllib3').setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
+logging.info("Starting gridMET Drought export tasks to BLM database")
 
 
-def handle_event(event):
+def handle_event(event, context):
     """Triggered from a message on a Cloud Pub/Sub topic.
     Args:
         event (dict): Event payload.
     """
 
     # Need to authenticate using instructions here: https://google-auth.readthedocs.io/en/master/reference/google.auth.html
-    credentials, project_id = google.auth.default();
+    credentials, project_id = google.auth.default()
 
-    ee.Initialize(credentials, project=project_id);
+    logging.info('Initializing GEE using application default credentials')
+    ee.Initialize(credentials, project=project_id)
+
+    ee.data.setWorkloadTag('ce-blm-database-gridmet-drought')
+
     run_export()
 
 
@@ -67,8 +68,8 @@ def run_export():
             miss_dates = sorted(set(all_dates) - set(coll_dates))
 
             for date in miss_dates:
-
-                print("Running ", datetime.datetime.fromtimestamp(date/1000.0), ' for ', land_unit_short, ' ', var_name)
+                
+                logging.info("Running ", datetime.datetime.fromtimestamp(date/1000.0), ' for ', land_unit_short, ' ', var_name)
         
                 # Parse date for ID
                 date_ymd = datetime.datetime.fromtimestamp(date/1000.0).strftime('%Y%m%d')
