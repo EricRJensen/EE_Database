@@ -64,9 +64,9 @@ def run_export():
             # Get list of dates from collection
             coll_dates = ee.ImageCollection(out_path).aggregate_array('system:time_start').distinct().getInfo()
 
-            # Get list of dates missing from collection and filter out dates before 1986
+            # Get list of dates missing from collection and filter out dates before 2020
             miss_dates = sorted(set(all_dates) - set(coll_dates))
-            miss_dates = [i for i in miss_dates if i >= 504982643000]
+            miss_dates = [i for i in miss_dates if i >= 1577916928000]
 
             for date in miss_dates:
 
