@@ -1,0 +1,8 @@
+{
+    "author": "Google LLC",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@google/earthengine": "^0.1.x",
+        "@google-cloud/functions-framework": "^3.1.0"
+    }
+}
