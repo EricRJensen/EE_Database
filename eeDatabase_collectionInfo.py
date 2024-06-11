@@ -42,7 +42,15 @@ in_ic_dict = {'GridMET_Drought': {'in_ic_paths': ['GRIDMET/DROUGHT'],
             'MTBS': {'in_ic_paths': ['projects/climate-engine-pro/assets/mtbs_mosaics_annual'],
                      'var_names': ['Severity'],
                      'var_type': 'Categorical',
-                     'ic_mask': True}}
+                     'ic_mask': True},
+            'VegDRI': {'in_ic_paths': ['projects/climate-engine-pro/assets/ce-veg-dri'],
+                     'var_names': ['vegdri'],
+                     'var_type': 'Categorical',
+                     'ic_mask': False},
+            'VegDRI_Cont': {'in_ic_paths': ['projects/climate-engine-pro/assets/ce-veg-dri'],
+                     'var_names': ['vegdri'],
+                     'var_type': 'Continuous',
+                     'ic_mask': False}}
 
 # Define properties for variables in dictionary
 var_dict = {'Long_Term_Drought_Blend': {'units': 'drought'},
@@ -69,4 +77,5 @@ var_dict = {'Long_Term_Drought_Blend': {'units': 'drought'},
             'NDVI': {'units': 'unitless'},
             'ET': {'units': 'mm'},
             'PET': {'units': 'mm'},
-            'Severity': {'units': 'fire severity'}}
+            'Severity': {'units': 'fire severity'},
+            'vegdri': {'units': 'drought'}}

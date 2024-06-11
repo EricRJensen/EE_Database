@@ -65,6 +65,12 @@ def get_collection_dates(in_ic_paths, start_date, end_date):
         # Read-in MTBS image collection, filter dates, and return client-side list of dates
         in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
         return(in_ic.aggregate_array('system:time_start').getInfo())
+    
+    elif in_ic_paths == ['projects/climate-engine-pro/assets/ce-veg-dri']:
+
+        # Read-in VegDRI image collection, filter dates, and return client-side list of dates
+        in_ic = ee.ImageCollection(in_ic_paths[0]).filterDate(start_date, end_date)
+        return(in_ic.aggregate_array('system:time_start').getInfo())
 
 
 def generate_id_img(in_fc_path, in_fc_id):
@@ -205,7 +211,20 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name, tile_scale):
 
     # Need to further pre-process drought blends to be able to extract bins consistent with drought.gov
     # There are no reducers that allow histogram bins with variable widths, so we have to put bins into categories to start
+    # Reclassify drought blends using schema below
     if in_ic_name == "GridMET_Drought":
+        img = img.where(img.lt(-4.0), 0)\
+            .where(img.lt(-3.0).And(img.gte(-4.0)), 1)\
+            .where(img.lt(-2.0).And(img.gte(-3.0)), 2)\
+            .where(img.lt(-1.0).And(img.gte(-2.0)), 3)\
+            .where(img.lt(2.0).And(img.gte(-1.0)), 4)\
+            .where(img.lt(3.0).And(img.gte(-2.0)), 5)\
+            .where(img.lt(4.0).And(img.gte(3.0)), 6)\
+            .where(img.gte(4.0), 7).toInt()
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']
+
+    # Reclassify VegDRI using schema below
+    elif in_ic_name == "VegDRI":
         img = img.where(img.lt(-2.0), 0)\
             .where(img.lt(-1.5).And(img.gte(-2.0)), 1)\
             .where(img.lt(-1.2).And(img.gte(-1.5)), 2)\
@@ -218,10 +237,12 @@ def img_to_pts_categorical(in_i, in_fc, in_ic_name, tile_scale):
             .where(img.lt(2.0).And(img.gte(1.5)), 9)\
             .where(img.gte(2.0), 10).toInt()
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
+
     # Maintain original values for USDM
     elif in_ic_name == "USDM":
         img = img
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
+
     # Maintain original values for MTBS
     elif in_ic_name == "MTBS":
         img = img
@@ -327,6 +348,20 @@ def pts_to_img_categorical(in_fc, in_ic_name):
     # >2.0 (W4) = c10
     if in_ic_name == "GridMET_Drought":
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10']
+
+    # Reclassify VegDRI using schema below
+    # VegDRI classes described below
+    # <-4.0 (D4) = c0
+    # -4.0--3.0 (D3) = c1
+    # -3.0--2.0 (D2) = c2
+    # -2.0-1.0 (D1) = c3
+    # -1.0-2.0 (Neutral) = c4
+    # 2.0-3.0 (W0) = c5
+    # 3.0-4.0 (W1) = c6
+    # >4.0 (W4) = c7
+    elif in_ic_name == "VegDRI":
+        classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']
+
     # USDM classes described below
     # -1 Neutral or Wet = c0
     # 0 Abnormal Dry (D0) = c1
@@ -336,6 +371,7 @@ def pts_to_img_categorical(in_fc, in_ic_name):
     # 4 Exceptional Drought (D4) = c5
     elif in_ic_name == "USDM":
         classes = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5']
+
     # MTBS classes described below
     # 0 Background = c0
     # 1 Unburned to low severity = c1
@@ -470,6 +506,11 @@ def run_image_export(in_ic_paths, date, out_path, properties):
 
         # Run function to pre-process the MTBS data
         in_i = eedb_col.preprocess_mtbs(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
+
+    elif in_ic_paths == ['projects/climate-engine-pro/assets/ce-veg-dri']:
+
+        # Run function to pre-process the MTBS data
+        in_i = eedb_col.preprocess_vegdri(in_ic_paths = in_ic_paths, var_name = properties.get('var_name'), date = date)
 
 
     # ---------------------------- Apply functions to output image ---------------------------------

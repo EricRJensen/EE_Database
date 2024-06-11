@@ -1,5 +1,6 @@
 import ee
 
+
 # Function to calculate short-term and long-term blends
 def preprocess_gm_drought(in_ic_paths, var_name, date):
     """
@@ -266,6 +267,7 @@ def preprocess_rap(in_ic_paths, var_name, date):
     
         return(out_i)
 
+
 # Function to preprocess usdm
 def preprocess_usdm(in_ic_paths, var_name, date):
     """
@@ -531,6 +533,7 @@ def preprocess_lsndvi(in_ic_paths, var_name, date, in_fc):
 
     return(out_i)
 
+
 # Function to preprocess MTBS
 def preprocess_mtbs(in_ic_paths, var_name, date):
     """
@@ -551,6 +554,37 @@ def preprocess_mtbs(in_ic_paths, var_name, date):
     # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
     def replace_name(name):
         return ee.String(name).replace(var_name, '').replace('mtbs_mosaic_', '').replace('_', '').cat('0101')
+    
+    # Finish cleaning input image
+    out_i = out_i.rename(out_i.bandNames().map(replace_name)).unmask()
+    
+    return(out_i)
+
+
+# Function to preprocess VegDRI
+def preprocess_vegdri(in_ic_paths, var_name, date):
+    """
+    :param in_ic_paths: e.g. ['GRIDMET/DROUGHT'] or ['projects/rangeland-analysis-platform/vegetation-cover-v3']
+    :param var_name: e.g. 'NDVI', 'long_term_drought_blend', 'tmmn'
+    :param date: e.g. system:time_start in milliseconds since Unix epoch
+    :return: Earth Engine time-series image with dates (YYYYMMDD) as bands
+    """
+    # Read-in VegDRI image collection
+    in_ic = ee.ImageCollection(in_ic_paths[0])
+
+    # Filter for collection for images in date range and select variable of interest
+    out_ic = in_ic.filter(ee.Filter.eq('system:time_start', date)).select(var_name)
+
+    # Function to scale VegDRI values to PDSI range
+    def normalize_vegdri(img):
+        return img.addBands(img.subtract(128).divide(16).rename('vegdri_norm'))
+    
+    # Convert Image Collection to multi-band image
+    out_i = normalize_vegdri(out_ic.toBands()).select(['vegdri_norm'], ['vegdri'])
+    
+    # Bandnames must be an eight digit character string 'YYYYMMDD'. Annual data will be 'YYYY0101'.
+    def replace_name(name):
+        return ee.String(name).replace(ee.String('_').cat(var_name), '')
     
     # Finish cleaning input image
     out_i = out_i.rename(out_i.bandNames().map(replace_name)).unmask()
